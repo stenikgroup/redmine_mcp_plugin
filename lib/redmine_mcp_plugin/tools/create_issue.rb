@@ -37,6 +37,28 @@ module RedmineMcpPlugin
           tracker = project.trackers.find_by(name: tracker_name.to_s)
           raise ToolError, "Project #{project.identifier} has no tracker named #{tracker_name.inspect}" if tracker.nil?
 
+          # add_issues is granted per tracker, not per project
+          # (app/views/roles/_form.html.erb:75), and the authorize! above only
+          # checks the project. Core's own filter sits in safe_attributes=
+          # (issue.rb:590): a tracker outside allowed_target_trackers is
+          # silently dropped, and issue.rb:605 then substitutes
+          # allowed_trackers.first.
+          #
+          # Refusing instead is a deliberate divergence from core. Core can
+          # afford to drop it quietly because it is redisplaying a form to a
+          # human who can see which tracker the select box settled on. We answer
+          # an agent, which will report success to somebody who will not check,
+          # and an issue filed under the wrong tracker reads exactly like one
+          # filed correctly. So name the tracker and refuse.
+          #
+          # The instance method, not the class one, on purpose: it is the
+          # identical call safe_attributes= makes, so this can never refuse a
+          # tracker core would have accepted.
+          unless issue.allowed_target_trackers(user).where(id: tracker.id).exists?
+            raise ToolError, 'You do not have permission to create issues with tracker ' \
+                             "#{tracker_name.inspect} in project #{project.identifier}"
+          end
+
           attributes['tracker_id'] = tracker.id
         end
 

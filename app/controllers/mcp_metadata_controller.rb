@@ -34,7 +34,7 @@ class McpMetadataController < ApplicationController
       scopes_supported: supported_scopes,
       bearer_methods_supported: %w[header],
       resource_name: 'Redmine MCP Server',
-      resource_documentation: 'https://github.com/joaoperfig/redmine_mcp_plugin'
+      resource_documentation: 'https://github.com/stenikgroup/redmine_mcp_plugin'
     }
   end
 
@@ -84,10 +84,23 @@ class McpMetadataController < ApplicationController
   def supported_scopes
     return [] unless defined?(Doorkeeper)
 
-    scopes = doorkeeper_config.scopes.to_a.map(&:to_s)
-    return scopes if scopes.any?
+    # Only the permissions this server's own tools declare, not every scope
+    # Doorkeeper knows about. A client that reads scopes_supported and asks for
+    # all of it would otherwise request ~200 scopes including `admin`, which
+    # either fails consent with invalid_scope or, worse, succeeds and hands the
+    # client far more than the tools can use. Write tools drop out while the
+    # server is read-only, so the advertised set matches what is callable.
+    scopes = RedmineMcpPlugin::Registry.all
+                                       .reject { |tool| tool.write? && RedmineMcpPlugin::Settings.read_only? }
+                                       .map(&:mcp_permission)
+                                       .compact
+                                       .map(&:to_s)
+                                       .uniq
 
-    Redmine::AccessControl.permissions.map { |permission| permission.name.to_s } + %w[admin]
+    # Intersected with what Doorkeeper will actually accept, so a permission
+    # renamed by a plugin cannot put an unconsentable scope in the document.
+    known = doorkeeper_config.scopes.to_a.map(&:to_s)
+    known.any? ? (scopes & known) : scopes
   rescue StandardError => e
     Rails.logger.warn("[redmine_mcp_plugin] could not enumerate OAuth2 scopes: #{e.class}: #{e.message}")
     []

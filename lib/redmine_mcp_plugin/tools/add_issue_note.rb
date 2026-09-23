@@ -27,6 +27,24 @@ module RedmineMcpPlugin
         raise ToolError, "No visible issue with id #{arguments['id'].inspect}" if issue.nil?
 
         authorize!(:add_issue_notes, issue.project)
+
+        # add_issue_notes is one of the five permissions Redmine grants per
+        # tracker rather than per project (app/views/roles/_form.html.erb:75).
+        # Both checks are needed and neither subsumes the other:
+        #
+        #   authorize! -> User#allowed_to? intersects the user's roles with the
+        #     OAuth token's scopes (user.rb:770), but never looks at a tracker.
+        #   notes_addable? -> user_tracker_permission? (issue.rb:220 -> :1708)
+        #     checks the tracker, but reads role.has_permission? directly with
+        #     no scope argument, so it is blind to OAuth scopes.
+        #
+        # Core enforces the second through safe_attributes('notes')
+        # (issue.rb:514). init_journal below does not take that path, and
+        # Journal carries no validation that would catch it afterwards, so
+        # without this line a role granted add_issue_notes on one tracker could
+        # comment on every tracker in the project.
+        raise ToolError, 'You do not have permission to do that' unless issue.notes_addable?(user)
+
         raise ToolError, 'notes must not be empty' if arguments['notes'].to_s.strip.empty?
 
         # Order matters and is easy to get wrong. Issue delegates
