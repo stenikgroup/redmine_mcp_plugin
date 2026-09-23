@@ -23,7 +23,7 @@ Redmine::Plugin.register :redmine_mcp_plugin do
   description 'Exposes Redmine over the Model Context Protocol, in-process, ' \
               'using Redmine\'s own authentication and permission system.'
   version     RedmineMcpPlugin::VERSION
-  url         'https://github.com/joaoperfig/redmine_mcp_plugin'
+  url         'https://github.com/stenikgroup/redmine_mcp_plugin'
   author_url  'https://github.com/joaoperfig'
 
   # Redmine 6.1 is the floor for OAuth2 (Doorkeeper) support, which is the
