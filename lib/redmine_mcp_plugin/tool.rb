@@ -34,6 +34,12 @@ module RedmineMcpPlugin
       def write?       = !!@mcp_write
       def destructive? = !!@mcp_destructive
 
+      # A tool may declare several permissions, because core grants some
+      # abilities through more than one: an issue is editable with edit_issues,
+      # or with edit_own_issues when the caller is the author. Any one of them
+      # admits the tool; the tool itself applies core's actual rule per record.
+      def mcp_permissions = Array(@mcp_permission)
+
       # Whether this tool should appear in tools/list for the current user.
       # tools/list is allowed to vary by the authorization presented on the
       # request -- the 2026-07-28 spec says so explicitly -- and hiding a tool
@@ -41,9 +47,9 @@ module RedmineMcpPlugin
       # model discover it and fail.
       def available_to?(user)
         return false if write? && Settings.read_only?
-        return true  if mcp_permission.nil?
+        return true  if mcp_permissions.empty?
 
-        user.allowed_to?(mcp_permission, nil, global: true)
+        mcp_permissions.any? { |permission| user.allowed_to?(permission, nil, global: true) }
       end
 
       def descriptor
@@ -84,7 +90,8 @@ module RedmineMcpPlugin
       klass = self.class
       raise PermissionError, 'This tool is disabled: the server is in read-only mode' if klass.write? && Settings.read_only?
 
-      if klass.mcp_permission && !user.allowed_to?(klass.mcp_permission, nil, global: true)
+      permissions = klass.mcp_permissions
+      if permissions.any? && permissions.none? { |p| user.allowed_to?(p, nil, global: true) }
         raise PermissionError, 'You do not have permission to use this tool'
       end
 
@@ -188,6 +195,64 @@ module RedmineMcpPlugin
 
     def iso(time)
       time&.iso8601
+    end
+
+    # --- write helpers ------------------------------------------------------
+
+    # Built from Setting.protocol and Setting.host_name, the way Redmine builds
+    # links in its own notification emails, rather than from the request.
+    # nil when host_name is unset: a missing setting must not fail a write that
+    # already succeeded.
+    def absolute_url(helper, *args)
+      return nil if Setting.host_name.blank?
+
+      Rails.application.routes.url_helpers.public_send(helper, *args, **Mailer.default_url_options)
+    end
+
+    # What a write tool reports back: the issue as saved, read off the record.
+    # `custom_field_ids` are the ones the caller sent, so the reply shows what
+    # core stored for them.
+    def issue_state(issue, custom_field_ids = [])
+      {
+        id: issue.id,
+        subject: issue.subject,
+        project_identifier: issue.project&.identifier,
+        tracker: issue.tracker&.name,
+        status: issue.status&.name,
+        assigned_to: issue.assigned_to&.name,
+        priority: issue.priority&.name,
+        custom_fields: saved_custom_fields(issue, custom_field_ids),
+        url: absolute_url(:issue_url, issue)
+      }
+    end
+
+    def saved_custom_fields(record, ids)
+      Array(ids).filter_map do |id|
+        value = record.custom_field_values.detect { |v| v.custom_field_id.to_s == id.to_s }
+        next if value.nil?
+
+        { id: value.custom_field_id, name: value.custom_field.name, value: value.value }
+      end
+    end
+
+    # The caller sends custom fields keyed by numeric id; core takes the same
+    # shape as custom_field_values. SchemaValidator does not walk into an
+    # object, so the shape is checked here.
+    def custom_field_values_from(arguments)
+      raw = arguments['custom_fields']
+      return nil if raw.blank?
+      raise ToolError, 'custom_fields must be an object keyed by numeric custom field id' unless raw.is_a?(Hash)
+
+      raw.each_with_object({}) do |(id, value), out|
+        raise ToolError, "custom_fields key #{id.inspect} is not a numeric custom field id" unless /\A\d+\z/.match?(id.to_s)
+        raise ToolError, "custom_fields[#{id}] must be a string, a number, or an array of them" if value.is_a?(Hash)
+
+        out[id.to_s] = value.is_a?(Array) ? value.map(&:to_s) : value.to_s
+      end
+    end
+
+    def custom_field_ids(arguments)
+      arguments['custom_fields'].is_a?(Hash) ? arguments['custom_fields'].keys : []
     end
   end
 end
