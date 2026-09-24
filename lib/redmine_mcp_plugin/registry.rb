@@ -21,6 +21,7 @@ module RedmineMcpPlugin
           Tools::GetWikiPage,
           Tools::ListEnumerations,
           Tools::ListUsers,
+          Tools::ListTimeEntries,
           Tools::GetIssueFields,
           Tools::CreateIssue,
           Tools::UpdateIssue,
