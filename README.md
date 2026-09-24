@@ -70,10 +70,11 @@ discovery documents. Upstream advertised every scope Doorkeeper knows — every 
 plus `admin`, ~200 in all. Claude requests exactly what `scopes_supported` lists, so consent either
 failed with `invalid_scope` or granted far more than the tools use.
 
-Ours advertises only the permissions the registered tools declare (`mcp_permission`), dropping the
+Ours advertises only the permissions the registered tools declare (`mcp_permissions`), dropping the
 write tools while the server is read-only, intersected with what Doorkeeper will accept. Read-only
-gives `view_project`, `view_issues`, `view_wiki_pages`; with writes on, add `add_issues` and
-`add_issue_notes`. The OAuth application in Redmine must enable exactly these, no more and no
+gives `view_project`, `view_issues`, `view_wiki_pages`; with writes on, add `add_issues`,
+`add_issue_notes`, `edit_issues`, `edit_own_issues` and `log_time`. The OAuth application in Redmine
+must enable exactly these, no more and no
 fewer, or consent fails with `invalid_scope`. The same file probes Doorkeeper for PKCE support rather than
 assuming it, and advertises `S256` only — never `plain`, which MCP clients may not select.
 
@@ -214,10 +215,13 @@ while read-only mode is on, which is the default.
 | `list_projects`, `get_project` | `view_project` |
 | `search_issues`, `get_issue` | `view_issues` |
 | `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
-| `list_enumerations` | none. Trackers, statuses, priorities |
+| `list_enumerations` | none. Trackers, statuses, priorities, time entry activities |
 | `list_users` | none. Filtered by `Principal.visible` |
+| `get_issue_fields` | `view_issues`. What the caller may set on an issue, before a write |
 | `create_issue` (write) | `add_issues`, on the requested tracker |
+| `update_issue` (write) | `edit_issues`, or `edit_own_issues` on one's own issue, on the issue's tracker |
 | `add_issue_note` (write) | `add_issue_notes`, on the issue's tracker, plus `set_notes_private` for private notes |
+| `log_time` (write) | `log_time`. Always for the authenticated user |
 
 `get_issue` respects per-field custom field visibility and filters private notes by role, as above.
 `list_users` uses `Principal.visible` rather than `User.all`, which honours each role's
