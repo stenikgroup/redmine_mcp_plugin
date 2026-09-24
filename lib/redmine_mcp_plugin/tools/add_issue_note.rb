@@ -5,7 +5,8 @@ module RedmineMcpPlugin
     class AddIssueNote < Tool
       tool 'add_issue_note',
            title: 'Add note to issue',
-           description: 'Append a note (comment) to an existing issue.',
+           description: 'Append a note (comment) to an existing issue. After a successful write, ' \
+                        'always finish by asking the user to check the result at the returned url.',
            permission: :add_issue_notes,
            write: true,
            schema: {
@@ -28,21 +29,8 @@ module RedmineMcpPlugin
 
         authorize!(:add_issue_notes, issue.project)
 
-        # add_issue_notes is one of the five permissions Redmine grants per
-        # tracker rather than per project (app/views/roles/_form.html.erb:75).
-        # Both checks are needed and neither subsumes the other:
-        #
-        #   authorize! -> User#allowed_to? intersects the user's roles with the
-        #     OAuth token's scopes (user.rb:770), but never looks at a tracker.
-        #   notes_addable? -> user_tracker_permission? (issue.rb:220 -> :1708)
-        #     checks the tracker, but reads role.has_permission? directly with
-        #     no scope argument, so it is blind to OAuth scopes.
-        #
-        # Core enforces the second through safe_attributes('notes')
-        # (issue.rb:514). init_journal below does not take that path, and
-        # Journal carries no validation that would catch it afterwards, so
-        # without this line a role granted add_issue_notes on one tracker could
-        # comment on every tracker in the project.
+        # add_issue_notes is granted per tracker: authorize! covers the project
+        # and the OAuth scope, notes_addable? (issue.rb:220) covers the tracker.
         raise ToolError, 'You do not have permission to do that' unless issue.notes_addable?(user)
 
         raise ToolError, 'notes must not be empty' if arguments['notes'].to_s.strip.empty?
@@ -59,7 +47,8 @@ module RedmineMcpPlugin
         end
         raise ToolError, "Could not add note: #{issue.errors.full_messages.join('; ')}" unless issue.save
 
-        { issue_id: issue.id, journal_id: issue.current_journal&.id, created_on: iso(issue.current_journal&.created_on) }
+        { issue_id: issue.id, journal_id: issue.current_journal&.id,
+          created_on: iso(issue.current_journal&.created_on), url: absolute_url(:issue_url, issue) }
       end
     end
   end
