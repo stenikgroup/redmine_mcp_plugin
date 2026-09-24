@@ -125,6 +125,14 @@ module RedmineMcpPlugin
       raise ToolError, 'You do not have permission to do that' unless user.allowed_to?(permission, project)
     end
 
+    # add_issue_notes is granted per tracker: authorize! covers the project and
+    # the OAuth scope, notes_addable? (issue.rb:220) covers the tracker. Core
+    # applies the second through safe_attributes, a path init_journal skips.
+    def authorize_note!(issue)
+      authorize!(:add_issue_notes, issue.project)
+      raise ToolError, 'You do not have permission to do that' unless issue.notes_addable?(user)
+    end
+
     # SchemaValidator has already refused a non-integer or below-minimum limit,
     # so all that is left is the server-side cap. max_results is the
     # administrator's ceiling, not a suggestion the caller may raise.

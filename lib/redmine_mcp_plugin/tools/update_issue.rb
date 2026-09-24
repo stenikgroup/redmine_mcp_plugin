@@ -65,13 +65,6 @@ module RedmineMcpPlugin
         raise ToolError, 'You do not have permission to do that' unless scoped && issue.attributes_editable?(user)
       end
 
-      # Same split for the note, and init_journal bypasses the safe_attributes
-      # guard that would otherwise apply notes_addable?.
-      def authorize_note!(issue)
-        authorize!(:add_issue_notes, issue.project)
-        raise ToolError, 'You do not have permission to do that' unless issue.notes_addable?(user)
-      end
-
       def attributes_from(arguments, issue)
         attributes = {}
         attributes['subject']     = arguments['subject'].to_s     if arguments.key?('subject')

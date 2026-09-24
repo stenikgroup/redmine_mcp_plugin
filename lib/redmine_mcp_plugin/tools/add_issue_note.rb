@@ -27,12 +27,7 @@ module RedmineMcpPlugin
         issue = Issue.visible(user).find_by(id: arguments['id'].to_i)
         raise ToolError, "No visible issue with id #{arguments['id'].inspect}" if issue.nil?
 
-        authorize!(:add_issue_notes, issue.project)
-
-        # add_issue_notes is granted per tracker: authorize! covers the project
-        # and the OAuth scope, notes_addable? (issue.rb:220) covers the tracker.
-        raise ToolError, 'You do not have permission to do that' unless issue.notes_addable?(user)
-
+        authorize_note!(issue)
         raise ToolError, 'notes must not be empty' if arguments['notes'].to_s.strip.empty?
 
         # Order matters and is easy to get wrong. Issue delegates
