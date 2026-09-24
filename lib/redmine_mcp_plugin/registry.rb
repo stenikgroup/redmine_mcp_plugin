@@ -15,6 +15,7 @@ module RedmineMcpPlugin
           Tools::ListProjects,
           Tools::GetProject,
           Tools::SearchIssues,
+          Tools::ListQueries,
           Tools::GetIssue,
           Tools::ListWikiPages,
           Tools::GetWikiPage,
