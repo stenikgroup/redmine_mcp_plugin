@@ -58,6 +58,29 @@ carries ambient browser credentials.
 API key mode ships **on** by default (`lib/redmine_mcp_plugin/settings.rb`), so switching it off is
 an explicit step, not something the defaults do for you.
 
+### OAuth application scopes
+
+Administration → Applications → the MCP application. Tick exactly the scopes the server advertises,
+no more and no fewer, or consent fails with `invalid_scope`. The permission names below are the
+scope; the label is what the English UI shows, and several labels repeat across sections.
+
+| Scope | Label in Administration → Applications | Section |
+|---|---|---|
+| `view_project` | View projects | Project |
+| `view_issues` | View Issues | Issue tracking |
+| `view_wiki_pages` | View wiki | Wiki |
+| `view_time_entries` | View spent time | Time tracking |
+| `add_issues` | Add issues | Issue tracking |
+| `edit_issues` | Edit issues | Issue tracking |
+| `edit_own_issues` | Edit own issues | Issue tracking |
+| `add_issue_notes` | Add notes | Issue tracking — **not** the "Add notes" under Contacts |
+| `log_time` | Log spent time | Time tracking — **not** "Log spent time for other users" |
+
+The first four are advertised in read-only mode, which is the default, and are all an application
+needs while the server stays read-only. The last five are advertised only once read-only mode is
+switched off; adding them to the application before then makes consent fail, because the server will
+not have asked for them.
+
 ## Local patches
 
 Two changes are ours. One is in this repository; the other is not, and will be lost on upgrade if
@@ -72,9 +95,9 @@ failed with `invalid_scope` or granted far more than the tools use.
 
 Ours advertises only the permissions the registered tools declare (`mcp_permissions`), dropping the
 write tools while the server is read-only, intersected with what Doorkeeper will accept. Read-only
-gives `view_project`, `view_issues`, `view_wiki_pages`; with writes on, add `add_issues`,
-`add_issue_notes`, `edit_issues`, `edit_own_issues` and `log_time`. The OAuth application in Redmine
-must enable exactly these, no more and no
+gives `view_project`, `view_issues`, `view_wiki_pages` and `view_time_entries`; with writes on, add
+`add_issues`, `add_issue_notes`, `edit_issues`, `edit_own_issues` and `log_time`. The OAuth
+application in Redmine must enable exactly these, no more and no
 fewer, or consent fails with `invalid_scope`. The same file probes Doorkeeper for PKCE support rather than
 assuming it, and advertises `S256` only — never `plain`, which MCP clients may not select.
 
@@ -218,6 +241,7 @@ while read-only mode is on, which is the default.
 | `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
 | `list_enumerations` | none. Trackers, statuses, priorities, time entry activities |
 | `list_users` | none. Filtered by `Principal.visible` |
+| `list_time_entries` | `view_time_entries`. Totals and per-group hours, filtered by `TimeEntry.visible` |
 | `get_issue_fields` | `view_issues`. What the caller may set on an issue, before a write |
 | `create_issue` (write) | `add_issues`, on the requested tracker |
 | `update_issue` (write) | `edit_issues`, or `edit_own_issues` on one's own issue, on the issue's tracker |
