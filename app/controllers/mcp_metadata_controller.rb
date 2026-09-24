@@ -92,8 +92,7 @@ class McpMetadataController < ApplicationController
     # server is read-only, so the advertised set matches what is callable.
     scopes = RedmineMcpPlugin::Registry.all
                                        .reject { |tool| tool.write? && RedmineMcpPlugin::Settings.read_only? }
-                                       .map(&:mcp_permission)
-                                       .compact
+                                       .flat_map(&:mcp_permissions)
                                        .map(&:to_s)
                                        .uniq
 
