@@ -214,6 +214,7 @@ while read-only mode is on, which is the default.
 | `whoami` | none. Reports identity, auth mode and granted scopes |
 | `list_projects`, `get_project` | `view_project` |
 | `search_issues`, `get_issue` | `view_issues` |
+| `list_queries` | `view_issues`. Saved queries, filtered by `IssueQuery.visible` |
 | `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
 | `list_enumerations` | none. Trackers, statuses, priorities, time entry activities |
 | `list_users` | none. Filtered by `Principal.visible` |
