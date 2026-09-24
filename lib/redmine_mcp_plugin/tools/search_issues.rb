@@ -7,12 +7,7 @@ module RedmineMcpPlugin
     # and filters registered by installed plugins included -- without a list
     # kept in step by hand.
     class SearchIssues < Tool
-      # Their values are the user directory or the project list. Both are large
-      # and both already have a paged tool of their own, so describe names the
-      # tool instead of inlining thousands of rows.
-      USER_FILTERS    = %w[assigned_to_id author_id watcher_id updated_by last_updated_by].freeze
-      PROJECT_FILTERS = %w[project_id subproject_id].freeze
-      MAX_VALUES      = 50
+      include QueryTool
 
       tool 'search_issues',
            title: 'Search issues',
@@ -20,7 +15,8 @@ module RedmineMcpPlugin
                         'and are combined with AND. Returns newest-updated first. total_count answers ' \
                         '"how many": limit 1 is enough to count, do not page to count. Call with ' \
                         'describe: true to list the filters, operators, sortable fields and values ' \
-                        'this Redmine accepts, including custom fields.',
+                        'this Redmine accepts, including custom fields. With group_by, groups covers ' \
+                        'the whole filtered set, not just the returned page.',
            permission: :view_issues,
            schema: {
              'type' => 'object',
@@ -49,6 +45,9 @@ module RedmineMcpPlugin
                                                'which means operator "=".' },
                'sort' => { 'type' => 'string',
                            'description' => 'field:direction, e.g. "priority:desc". Direction defaults to desc.' },
+               'group_by' => { 'type' => 'string',
+                               'description' => 'Group the whole filtered set and return a count per group, ' \
+                                                'e.g. "assigned_to". Fields from describe.' },
                'offset' => { 'type' => 'integer', 'minimum' => 0,
                              'description' => 'Rows to skip, for paging past the server cap. Defaults to 0.' },
                'limit' => { 'type' => 'integer', 'minimum' => 1, 'description' => 'Maximum issues to return.' }
@@ -74,13 +73,17 @@ module RedmineMcpPlugin
         return describe(query) if arguments['describe']
 
         apply_filters!(query, arguments, project)
-        apply_sort!(query, arguments['sort'], saved)
+        apply_sort!(query, arguments['sort'], default: [%w[updated_on desc]], saved: saved)
+        apply_group_by!(query, arguments['group_by'])
         raise ToolError, "Invalid search: #{query.errors.full_messages.join('; ')}" unless query.valid?
 
-        limit  = limit_for(arguments)
-        offset = offset_for(arguments)
-        rows   = query.issues(offset: offset, limit: limit).map { |issue| summarise(issue) }
-        paged(total: query.issue_count, offset: offset, key: :issues, rows: rows)
+        limit   = limit_for(arguments)
+        offset  = offset_for(arguments)
+        rows    = query.issues(offset: offset, limit: limit).map { |issue| summarise(issue) }
+        payload = paged(total: query.issue_count, offset: offset, key: :issues, rows: rows)
+        # result_count_by_group counts the whole filtered set in SQL, not the page.
+        payload[:groups] = group_rows(query.result_count_by_group) if query.grouped?
+        payload
       end
 
       # A saved query is read and never saved, so the stored row is untouched.
@@ -120,10 +123,7 @@ module RedmineMcpPlugin
         set_filter!(query, 'updated_on', '>=', iso_date(arguments['updated_since'], 'updated_since')) if arguments['updated_since'].present?
         set_filter!(query, 'due_date', '<=', iso_date(arguments['due_before'], 'due_before')) if arguments['due_before'].present?
 
-        explicit.each do |field, spec|
-          operator, values = operator_and_values(spec)
-          set_filter!(query, field.to_s, operator, values)
-        end
+        apply_explicit_filters!(query, explicit)
       end
 
       def reject_conflicts!(arguments, explicit)
@@ -133,85 +133,6 @@ module RedmineMcpPlugin
         return unless arguments['assigned_to_me'] && arguments['assigned_to_id'].present?
 
         raise ToolError, 'Pass assigned_to_me or assigned_to_id, not both'
-      end
-
-      # add_filter drops an unknown field, and a value that is not an Array,
-      # without saying so (query.rb:735). A dropped filter widens the result,
-      # which reads to the caller exactly like an answer, so check first.
-      def set_filter!(query, field, operator, values = '')
-        available = query.available_filters[field]
-        unless available
-          raise ToolError, "Unknown filter #{field.inspect}. Call with describe: true for the ones this Redmine accepts"
-        end
-
-        legal = Query.operators_by_filter_type[available[:type]] || []
-        unless legal.include?(operator)
-          raise ToolError, "Operator #{operator.inspect} is not valid for #{field.inspect}. Valid: #{legal.join(', ')}"
-        end
-
-        query.add_filter(field, operator, Array(values).map(&:to_s))
-      end
-
-      def operator_and_values(spec)
-        return ['=', Array(spec)] unless spec.is_a?(Hash)
-
-        [spec['operator'].presence&.to_s || '=', Array(spec['values'] || '')]
-      end
-
-      def apply_sort!(query, sort, saved)
-        if sort.blank?
-          # Today's documented order. A saved query keeps the order it stores.
-          query.sort_criteria = [%w[updated_on desc]] unless saved
-          return
-        end
-
-        field, direction = sort.to_s.split(':', 2)
-        direction = direction.presence || 'desc'
-        legal = sortable_fields(query)
-
-        raise ToolError, "Cannot sort by #{field.inspect}. Sortable: #{legal.join(', ')}" unless legal.include?(field)
-        raise ToolError, "sort direction must be asc or desc, got #{direction.inspect}" unless %w[asc desc].include?(direction)
-
-        query.sort_criteria = [[field, direction]]
-      end
-
-      def sortable_fields(query)
-        query.sortable_columns.select { |_name, sortable| sortable.present? }.keys.sort
-      end
-
-      # --- describe -----------------------------------------------------------
-
-      def describe(query)
-        {
-          filters: query.available_filters.map { |field, filter| describe_filter(field, filter) },
-          sortable: sortable_fields(query)
-        }
-      end
-
-      def describe_filter(field, filter)
-        entry = { field: field, name: filter[:name], type: filter[:type].to_s,
-                  operators: Query.operators_by_filter_type[filter[:type]] || [] }
-
-        # Returning before reading filter[:values] also skips evaluating its
-        # lambda, which is a query per filter.
-        return entry.merge(values: nil, note: 'Ids come from list_users.')    if user_valued?(field, filter)
-        return entry.merge(values: nil, note: 'Ids come from list_projects.') if PROJECT_FILTERS.include?(field)
-
-        values = Array(filter[:values])
-        return entry if values.empty?
-
-        entry.merge(values: values.first(MAX_VALUES).map { |value| labelled(value) },
-                    values_truncated: values.size > MAX_VALUES)
-      end
-
-      def user_valued?(field, filter)
-        USER_FILTERS.include?(field) || filter[:field]&.field_format == 'user'
-      end
-
-      # A filter's values are plain strings, or [label, value] pairs.
-      def labelled(value)
-        label, stored = value.is_a?(Array) ? value : [value, value]
-        { value: stored.to_s, label: label.to_s }
       end
 
       # --- named filter resolution -------------------------------------------
@@ -237,12 +158,6 @@ module RedmineMcpPlugin
         raise ToolError, "Project #{project.identifier} has no version named #{name.inspect}" if version.nil?
 
         version.id
-      end
-
-      def iso_date(value, name)
-        Date.iso8601(value.to_s).iso8601
-      rescue ArgumentError
-        raise ToolError, "#{name} must be an ISO-8601 date, got #{value.inspect}"
       end
 
       def summarise(issue)
