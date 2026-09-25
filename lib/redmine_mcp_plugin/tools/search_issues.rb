@@ -2,10 +2,8 @@
 
 module RedmineMcpPlugin
   module Tools
-    # Built on core's IssueQuery rather than hand-written conditions, so the
-    # filters this accepts are the ones Redmine itself accepts -- custom fields
-    # and filters registered by installed plugins included -- without a list
-    # kept in step by hand.
+    # Built on core's IssueQuery, so the filters accepted are Redmine's own --
+    # custom fields and plugin filters included -- with no list kept by hand.
     class SearchIssues < Tool
       include QueryTool
 
@@ -59,13 +57,11 @@ module RedmineMcpPlugin
 
       def perform(arguments)
         project = arguments['project'].present? ? fetch_project(arguments['project']) : nil
-        # .visible filters by role but not by OAuth scope -- see the note on
-        # Tool. This is the check that honours a narrowed token.
+        # .visible honours roles but not OAuth scopes; this honours the token.
         authorize!(:view_issues, project) if project
 
-        # IssueQuery#base_scope calls Issue.visible with no argument, so it
-        # reads User.current rather than this tool's user. The controller sets
-        # them to the same object; assert that rather than depend on it.
+        # base_scope reads User.current rather than this tool's user; the
+        # controller sets them to the same object, so assert it rather than trust it.
         raise ToolError, 'You do not have permission to do that' unless User.current == user
 
         saved = arguments['query_id'].present?
@@ -81,15 +77,15 @@ module RedmineMcpPlugin
         offset  = offset_for(arguments)
         rows    = query.issues(offset: offset, limit: limit).map { |issue| summarise(issue) }
         payload = paged(total: query.issue_count, offset: offset, key: :issues, rows: rows)
-        # result_count_by_group counts the whole filtered set in SQL, not the page.
+        # Counted in SQL over the whole filtered set, not the page.
         payload[:groups] = group_rows(query.result_count_by_group) if query.grouped?
         payload
       end
 
       # A saved query is read and never saved, so the stored row is untouched.
       def build_query(arguments, project)
-        # name '_' because Query validates its presence and a transient query
-        # has none; this is what core's retrieve_query does (queries_helper.rb:368).
+        # A name because Query validates its presence; core does the same for
+        # the transient query behind its own issue list.
         return IssueQuery.new(name: '_', project: project) if arguments['query_id'].blank?
 
         query = IssueQuery.visible(user).find_by(id: arguments['query_id'].to_i)

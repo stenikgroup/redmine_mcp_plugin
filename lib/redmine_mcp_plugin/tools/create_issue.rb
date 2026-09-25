@@ -44,9 +44,8 @@ module RedmineMcpPlugin
           tracker = project.trackers.find_by(name: tracker_name.to_s)
           raise ToolError, "Project #{project.identifier} has no tracker named #{tracker_name.inspect}" if tracker.nil?
 
-          # add_issues is granted per tracker. Core silently substitutes a
-          # permitted tracker here (issue.rb:590); an agent would report that
-          # as success, so name the tracker and refuse instead.
+          # add_issues is granted per tracker, and core would silently substitute
+          # a permitted one -- which an agent reports as success. Refuse instead.
           unless issue.allowed_target_trackers(user).where(id: tracker.id).exists?
             raise ToolError, 'You do not have permission to create issues with tracker ' \
                              "#{tracker_name.inspect} in project #{project.identifier}"

@@ -47,8 +47,8 @@ module RedmineMcpPlugin
         authorize_edit!(issue) if attributes.any?
         authorize_note!(issue) unless notes.strip.empty?
 
-        # notes delegates to current_journal with allow_nil (issue.rb:67), so
-        # the journal has to exist before anything sets a note on it.
+        # notes delegates to the journal and is swallowed when there is none,
+        # so the journal has to exist first.
         issue.init_journal(user, notes)
         issue.safe_attributes = attributes
         raise ToolError, "Could not update issue: #{issue.errors.full_messages.join('; ')}" unless issue.save
@@ -56,9 +56,8 @@ module RedmineMcpPlugin
         issue_state(issue, custom_field_ids(arguments)).merge(journal_id: issue.current_journal&.id)
       end
 
-      # Core allows the edit with edit_issues, or with edit_own_issues on one's
-      # own issue, per tracker (issue.rb:204). attributes_editable? is that rule
-      # but blind to OAuth scopes; allowed_to? honours scopes but not trackers.
+      # Core allows edit_issues, or edit_own_issues on one's own issue, per
+      # tracker. attributes_editable? misses OAuth scopes; allowed_to? misses trackers.
       def authorize_edit!(issue)
         scoped = user.allowed_to?(:edit_issues, issue.project) ||
                  (issue.author_id == user.id && user.allowed_to?(:edit_own_issues, issue.project))

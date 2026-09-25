@@ -34,10 +34,8 @@ module RedmineMcpPlugin
       def write?       = !!@mcp_write
       def destructive? = !!@mcp_destructive
 
-      # A tool may declare several permissions, because core grants some
-      # abilities through more than one: an issue is editable with edit_issues,
-      # or with edit_own_issues when the caller is the author. Any one of them
-      # admits the tool; the tool itself applies core's actual rule per record.
+      # Core grants some abilities through more than one permission, so any of
+      # them admits the tool; the tool applies core's real rule per record.
       def mcp_permissions = Array(@mcp_permission)
 
       # Whether this tool should appear in tools/list for the current user.
@@ -126,8 +124,7 @@ module RedmineMcpPlugin
     end
 
     # add_issue_notes is granted per tracker: authorize! covers the project and
-    # the OAuth scope, notes_addable? (issue.rb:220) covers the tracker. Core
-    # applies the second through safe_attributes, a path init_journal skips.
+    # the scope, notes_addable? the tracker, and init_journal skips core's own check.
     def authorize_note!(issue)
       authorize!(:add_issue_notes, issue.project)
       raise ToolError, 'You do not have permission to do that' unless issue.notes_addable?(user)
@@ -205,21 +202,16 @@ module RedmineMcpPlugin
       time&.iso8601
     end
 
-    # --- write helpers ------------------------------------------------------
-
-    # Built from Setting.protocol and Setting.host_name, the way Redmine builds
-    # links in its own notification emails, rather than from the request.
-    # nil when host_name is unset: a missing setting must not fail a write that
-    # already succeeded.
+    # Built the way Redmine builds links in its notification emails, not from
+    # the request. nil when unset: a missing setting must not fail a done write.
     def absolute_url(helper, *args)
       return nil if Setting.host_name.blank?
 
       Rails.application.routes.url_helpers.public_send(helper, *args, **Mailer.default_url_options)
     end
 
-    # What a write tool reports back: the issue as saved, read off the record.
-    # `custom_field_ids` are the ones the caller sent, so the reply shows what
-    # core stored for them.
+    # The issue as saved, read back off the record, with the custom fields the
+    # caller sent so the reply shows what core stored for them.
     def issue_state(issue, custom_field_ids = [])
       {
         id: issue.id,
@@ -243,9 +235,7 @@ module RedmineMcpPlugin
       end
     end
 
-    # The caller sends custom fields keyed by numeric id; core takes the same
-    # shape as custom_field_values. SchemaValidator does not walk into an
-    # object, so the shape is checked here.
+    # SchemaValidator does not walk into an object, so the shape is checked here.
     def custom_field_values_from(arguments)
       raw = arguments['custom_fields']
       return nil if raw.blank?

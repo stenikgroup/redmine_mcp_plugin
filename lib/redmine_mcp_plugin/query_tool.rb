@@ -1,25 +1,19 @@
 # frozen_string_literal: true
 
 module RedmineMcpPlugin
-  # The part of a query-backed read tool that is the same whichever core Query
-  # subclass drives it: validating filters, sorting and grouping against the
-  # query's own available_filters and columns, and describing all three.
-  #
-  # A module rather than more helpers on Tool: Tool is the permission and
-  # protocol base every tool inherits, and this is a trait two of them have.
+  # Filtering, sorting, grouping and describing against a core Query subclass.
+  # A module, not more helpers on Tool: only some tools are query-backed.
   module QueryTool
-    # Their values are the user directory or the project list. Both are large
-    # and both already have a paged tool of their own, so describe names the
-    # tool instead of inlining thousands of rows.
+    # Their values are the user directory or the project list; describe names
+    # the paged tool that already answers those instead of inlining them.
     USER_FILTERS    = %w[assigned_to_id author_id watcher_id updated_by last_updated_by user_id].freeze
     PROJECT_FILTERS = %w[project_id subproject_id].freeze
     MAX_VALUES      = 50
 
     private
 
-    # add_filter drops an unknown field, and a value that is not an Array,
-    # without saying so (query.rb:735). A dropped filter widens the result,
-    # which reads to the caller exactly like an answer, so check first.
+    # Core drops an unknown field silently, and a dropped filter widens the
+    # result, which reads to the caller exactly like an answer.
     def set_filter!(query, field, operator, values = '')
       available = query.available_filters[field]
       unless available
@@ -83,9 +77,8 @@ module RedmineMcpPlugin
 
     # --- grouped results ----------------------------------------------------
 
-    # Core keys grouped results by the group's own object -- a User, a Project,
-    # a Date or nil (test/unit/query_test.rb:2488) -- and renders them with a
-    # view helper a tool cannot reach, so name them here.
+    # Core keys grouped results by the group's own object and labels them with
+    # a view helper a tool cannot reach, so name them here.
     def group_rows(counts, totals = nil)
       Array(counts).map do |value, count|
         row = { group: group_label(value), count: count }
@@ -97,8 +90,7 @@ module RedmineMcpPlugin
     def group_label(value)
       case value
       when nil then { id: nil, label: '(none)' }
-      # Same rule as core: the id always, the subject only when visible
-      # (application_helper.rb:306).
+      # Same rule as core: the id always, the subject only when visible.
       when Issue then { id: value.id, label: value.visible?(user) ? "##{value.id} #{value.subject}" : "##{value.id}" }
       when ActiveRecord::Base then { id: value.id, label: value.respond_to?(:name) ? value.name : value.to_s }
       else { id: nil, label: value.to_s }
@@ -119,8 +111,7 @@ module RedmineMcpPlugin
       entry = { field: field, name: filter[:name], type: filter[:type].to_s,
                 operators: Query.operators_by_filter_type[filter[:type]] || [] }
 
-      # Returning before reading filter[:values] also skips evaluating its
-      # lambda, which is a query per filter.
+      # Returning early also skips evaluating the values lambda, a query each.
       return entry.merge(values: nil, note: 'Ids come from list_users.')    if user_valued?(field, filter)
       return entry.merge(values: nil, note: 'Ids come from list_projects.') if PROJECT_FILTERS.include?(field)
 

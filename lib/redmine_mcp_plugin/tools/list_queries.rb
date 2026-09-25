@@ -24,8 +24,7 @@ module RedmineMcpPlugin
       private
 
       def perform(arguments)
-        # Query.visible applies the public/private/role-visible rules and the
-        # project permission (query.rb:377); never Query.find.
+        # Query.visible applies the public/private/role rules; never Query.find.
         scope = IssueQuery.visible(user)
 
         if (identifier = arguments['project'].presence)

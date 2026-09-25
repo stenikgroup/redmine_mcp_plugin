@@ -84,20 +84,16 @@ class McpMetadataController < ApplicationController
   def supported_scopes
     return [] unless defined?(Doorkeeper)
 
-    # Only the permissions this server's own tools declare, not every scope
-    # Doorkeeper knows about. A client that reads scopes_supported and asks for
-    # all of it would otherwise request ~200 scopes including `admin`, which
-    # either fails consent with invalid_scope or, worse, succeeds and hands the
-    # client far more than the tools can use. Write tools drop out while the
-    # server is read-only, so the advertised set matches what is callable.
+    # Only what this server's tools declare. Advertising every scope Doorkeeper
+    # knows would have a client request ~200, `admin` among them.
     scopes = RedmineMcpPlugin::Registry.all
                                        .reject { |tool| tool.write? && RedmineMcpPlugin::Settings.read_only? }
                                        .flat_map(&:mcp_permissions)
                                        .map(&:to_s)
                                        .uniq
 
-    # Intersected with what Doorkeeper will actually accept, so a permission
-    # renamed by a plugin cannot put an unconsentable scope in the document.
+    # Intersected with what Doorkeeper accepts, so a permission renamed by a
+    # plugin cannot put an unconsentable scope in the document.
     known = doorkeeper_config.scopes.to_a.map(&:to_s)
     known.any? ? (scopes & known) : scopes
   rescue StandardError => e

@@ -73,8 +73,7 @@ module RedmineMcpPlugin
         attributes
       end
 
-      # Activities are per project (project.rb:265). Picking from the global
-      # list gives "Activity is not included in the list" on save.
+      # Activities are per project; one from the global list fails validation.
       def activity_for(project, name)
         activity = project.activities.find_by(name: name.to_s)
         raise ToolError, "Project #{project.identifier} has no activity named #{name.inspect}" if activity.nil?

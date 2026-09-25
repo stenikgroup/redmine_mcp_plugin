@@ -33,8 +33,8 @@ module RedmineMcpPlugin
           issue_id: issue.id,
           project_identifier: issue.project&.identifier,
           tracker: issue.tracker&.name,
-          # These two mix core attribute names with custom field ids
-          # (issue.rb:668-682); the ids are reported on each custom field.
+          # Core mixes attribute names with custom field ids here; the ids are
+          # reported on each custom field instead.
           required_attributes: core_attributes(issue.required_attribute_names(user)),
           read_only_attributes: core_attributes(issue.read_only_attribute_names(user)),
           custom_fields: custom_fields_for(issue),
@@ -69,8 +69,8 @@ module RedmineMcpPlugin
         authorize!(:add_issues, project)
 
         issue = Issue.new(project: project, author: user)
-        # available_custom_fields needs a project and a tracker (issue.rb:286),
-        # so the issue is built the way core's new-issue form builds it.
+        # A tracker as well as a project, or core reports no custom fields at
+        # all -- so build the issue the way core's new-issue form does.
         issue.tracker = resolve_tracker(project, issue.allowed_target_trackers(user), arguments['tracker'])
         issue
       end
@@ -102,8 +102,8 @@ module RedmineMcpPlugin
             id: field.id,
             name: field.name,
             format: field.field_format,
-            # is_required is the field definition; a workflow rule can require
-            # it for this user on this tracker alone.
+            # The definition flag, or a workflow rule that requires it for this
+            # user on this tracker alone.
             required: field.is_required? || required.include?(field.id.to_s),
             multiple: field.multiple?,
             default_value: field.default_value,
@@ -112,9 +112,8 @@ module RedmineMcpPlugin
         end
       end
 
-      # possible_values_options gives plain strings for a list field and
-      # [label, value] pairs for the formats stored as ids -- user, version,
-      # enumeration -- and for bool, whose values are '1' and '0'.
+      # Core gives plain strings for a list field, and [label, value] pairs for
+      # the formats stored as ids and for bool.
       def possible_values_for(field, issue)
         field.possible_values_options(issue).map do |option|
           label, value = option.is_a?(Array) ? option : [option, option]
