@@ -28,12 +28,8 @@ sudo -u redmine git clone https://github.com/stenikgroup/redmine_mcp_plugin.git 
 sudo systemctl restart nginx
 ```
 
-No `bundle install`, no migrations. Passenger reloads the application with nginx, so the restart
-above is the whole deployment step.
-
-One patch to Redmine core is required for the OAuth2 consent screen to work at all. It lives outside
-this repository — see [Local patches](#local-patches) — and must be re-applied after every Redmine
-upgrade.
+No `bundle install`, no migrations, no changes to Redmine core. Passenger reloads the application
+with nginx, so the restart above is the whole deployment step.
 
 ### Plugin settings
 
@@ -60,9 +56,11 @@ an explicit step, not something the defaults do for you.
 
 ### OAuth application scopes
 
-Administration → Applications → the MCP application. Tick exactly the scopes the server advertises,
-no more and no fewer, or consent fails with `invalid_scope`. The permission names below are the
-scope; the label is what the English UI shows, and several labels repeat across sections.
+Administration → Applications → the MCP application. Enable at least the scopes the server
+advertises. Enabling more is fine — verified live, consent succeeds — but fewer fails with
+`invalid_scope`, because the client requests exactly what `scopes_supported` lists. The permission
+names below are the scope; the label is what the English UI shows, and several labels repeat across
+sections.
 
 | Scope | Label in Administration → Applications | Section |
 |---|---|---|
@@ -75,79 +73,54 @@ scope; the label is what the English UI shows, and several labels repeat across 
 | `edit_own_issues` | Edit own issues | Issue tracking |
 | `add_issue_notes` | Add notes | Issue tracking — **not** the "Add notes" under Contacts |
 | `log_time` | Log spent time | Time tracking — **not** "Log spent time for other users" |
+| `set_notes_private` | Set notes as private | Issue tracking |
 
 The first four are advertised in read-only mode, which is the default, and are all an application
-needs while the server stays read-only. The last five are advertised only once read-only mode is
-switched off; adding them to the application before then makes consent fail, because the server will
-not have asked for them.
+needs while the server stays read-only. The last six are advertised only once read-only mode is
+switched off. `set_notes_private` gates no tool: `add_issue_note` checks it for `private: true`, and
+a permission a tool checks at runtime must be advertised, or no token can ever carry it.
+
+Adding a tool with a new permission changes the advertised set, and every user reconnects to get a
+token that carries it. The application only needs editing if it did not already enable the scope.
 
 ## Local patches
 
-Two changes are ours. One is in this repository; the other is not, and will be lost on upgrade if
-nobody re-applies it.
+Two changes are ours, both in this repository.
 
-### `supported_scopes`, in this repository
+### `supported_scopes`
 
 `app/controllers/mcp_metadata_controller.rb` enumerates the OAuth2 scopes advertised in both
 discovery documents. Upstream advertised every scope Doorkeeper knows — every Redmine permission
 plus `admin`, ~200 in all. Claude requests exactly what `scopes_supported` lists, so consent either
 failed with `invalid_scope` or granted far more than the tools use.
 
-Ours advertises only the permissions the registered tools declare (`mcp_permissions`), dropping the
-write tools while the server is read-only, intersected with what Doorkeeper will accept. Read-only
-gives `view_project`, `view_issues`, `view_wiki_pages` and `view_time_entries`; with writes on, add
-`add_issues`, `add_issue_notes`, `edit_issues`, `edit_own_issues` and `log_time`. The OAuth
-application in Redmine must enable exactly these, no more and no
-fewer, or consent fails with `invalid_scope`. The same file probes Doorkeeper for PKCE support rather than
+Ours advertises the permissions the registered tools declare (`mcp_permissions`) and the ones they
+check at runtime (`scopes`), dropping the write tools while the server is read-only, intersected
+with what Doorkeeper will accept. Read-only gives `view_project`, `view_issues`, `view_wiki_pages`
+and `view_time_entries`; with writes on, add `add_issues`, `add_issue_notes`, `edit_issues`,
+`edit_own_issues`, `log_time` and `set_notes_private`. The OAuth application in Redmine must enable
+at least these; it may enable more. The same file probes Doorkeeper for PKCE support rather than
 assuming it, and advertises `S256` only — never `plain`, which MCP clients may not select.
 
 On our instance PKCE support is confirmed: `/.well-known/oauth-authorization-server` returns
 `"code_challenge_methods_supported": ["S256"]`, verified against the live server.
 
-### Doorkeeper URL generation, in Redmine core
+### Doorkeeper URL generation
 
-Redmine's `config/initializers/30-redmine.rb` needs the patch below, or the OAuth2 consent screen
-returns 500 on any install whose layout links to a user — which includes ours. Relative controller
-references in the Redmine layouts are resolved against the current request's controller, which
-inside Doorkeeper is `doorkeeper/authorizations`, producing `doorkeeper/people`, `doorkeeper/my` and
-so on, and then `UrlGenerationError`.
+Redmine's layouts, and the plugins that extend them, reference controllers relatively:
+`controller: 'my'` in the account link, `controller: 'people'` in redmine_people's avatar helper.
+Rails resolves a relative controller against the one in the current request's path parameters,
+which inside Doorkeeper is `doorkeeper/authorizations`, so every such reference becomes
+`doorkeeper/<name>` and raises `UrlGenerationError` — a 500 on the OAuth2 consent screen of any
+install whose layout links to a user, which includes ours.
 
-```diff
---- /tmp/30-redmine.rb.bak
-+++ config/initializers/30-redmine.rb
-@@ -87,6 +87,29 @@
-   Doorkeeper::AuthorizedApplicationsController.layout "base"
-   Doorkeeper::AuthorizedApplicationsController.main_menu = false
- 
-+  # Those layouts, and the plugins that extend them, reference controllers
-+  # relatively: `controller: 'people'` in redmine_people's avatar helper,
-+  # `controller: 'my'` in the account link. Rails resolves a relative
-+  # controller against the one in the current request's path parameters, which
-+  # it carries in url_options[:_recall]. Inside Doorkeeper that is
-+  # doorkeeper/authorizations, so every such reference becomes doorkeeper/<name>
-+  # and raises UrlGenerationError -- turning the OAuth2 consent screen into a
-+  # 500 on any install whose layout links to a user. Stripping the namespace
-+  # from the recalled controller makes them resolve as they do everywhere else.
-+  [Doorkeeper::ApplicationsController,
-+   Doorkeeper::AuthorizationsController,
-+   Doorkeeper::AuthorizedApplicationsController].each do |controller|
-+    controller.class_eval do
-+      def url_options
-+        opts = super
-+        recall = opts[:_recall]
-+        return opts unless recall
-+
-+        opts.merge(_recall: recall.merge(controller: recall[:controller].to_s.sub(%r{\Adoorkeeper/}, '')))
-+      end
-+    end
-+  end
-+
-   default_paths = []
-   default_paths << Rails.root.join("app/assets/javascripts")
-   default_paths << Rails.root.join("app/assets/images")
-```
-
-This is a Redmine core file. A Redmine upgrade overwrites it. Re-apply, then restart nginx.
+`lib/redmine_mcp_plugin/doorkeeper_url_options.rb` strips the `doorkeeper/` prefix from the recalled
+controller in the three Doorkeeper controllers, and `init.rb` applies it in `after_initialize`.
+The timing matters: plugin `init.rb` files run in a `to_prepare` block registered before the one in
+which Redmine configures Doorkeeper, and touching a Doorkeeper controller before that configuration
+binds it to `ActionController::Base` for the life of the process. The module is prepended, so an
+install that still carries the older patch of `config/initializers/30-redmine.rb` keeps working;
+that patch can be removed at the next restart.
 
 ## Authentication
 
@@ -197,6 +170,10 @@ argument** — so they honour roles but are blind to OAuth scopes. A token scope
 but not `view_issues` would still see issues if `.visible` were the only check. In the other
 direction, `allowed_to?` alone would return rows from projects the user is not a member of.
 
+`User#admin?` is scope-aware too: an admin acts as an admin only when the token carries the `admin`
+scope, which this server never requests. Through the plugin an admin sees and does what their
+memberships grant, and nothing more.
+
 ### Tracker-level permissions
 
 Redmine grants five issue permissions **per tracker**, not per project: `view_issues`, `add_issues`,
@@ -204,14 +181,17 @@ Redmine grants five issue permissions **per tracker**, not per project: `view_is
 trackers, so a project-level check alone would let a role granted a permission on one tracker act on
 every tracker in the project.
 
-Of the three that this plugin exercises:
+Of the four that this plugin exercises:
 
 - `view_issues` — handled by core. `Issue.visible_condition` applies the tracker filter in SQL, and
   every read tool goes through `Issue.visible(user)`.
 - `add_issues` — `create_issue` checks `Issue#allowed_target_trackers` and **refuses** a tracker the
   caller may not use, naming it. Core silently substitutes the first permitted tracker instead,
   because core is redisplaying a form to a human who can see the result; an agent reports success to
-  somebody who will not check.
+  somebody who will not check. With no tracker named, the tool uses the only permitted one or refuses
+  and lists them.
+- `edit_issues` and `edit_own_issues` — `update_issue` checks `Issue#attributes_editable?`, which
+  applies both per tracker, on top of the scope-aware `allowed_to?`.
 - `add_issue_notes` — `add_issue_note` checks `Issue#notes_addable?`. Core applies this through
   `safe_attributes`, a path the tool does not take.
 
@@ -227,6 +207,10 @@ user's role grants it. This is deliberate on our side: roles are the access boun
 token scopes are a second, coarser restriction on top of them — not the thing that decides who may
 read what.
 
+Writing one is the other way round: `add_issue_note` with `private: true` checks `set_notes_private`
+through the scope-aware `allowed_to?`, which is why that permission is advertised as a scope once
+writes are on.
+
 ## Tools
 
 Read-only unless marked write. Write tools are hidden from `tools/list` and refused by `tools/call`
@@ -241,7 +225,7 @@ while read-only mode is on, which is the default.
 | `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
 | `list_enumerations` | none. Trackers, statuses, priorities, time entry activities |
 | `list_users` | none. Filtered by `Principal.visible` |
-| `list_time_entries` | `view_time_entries`. Totals and per-group hours, filtered by `TimeEntry.visible` |
+| `list_time_entries` | `view_time_entries`. Totals, per-group hours and each entry's custom fields, filtered by `TimeEntry.visible` |
 | `get_issue_fields` | `view_issues`. What the caller may set on an issue, before a write |
 | `create_issue` (write) | `add_issues`, on the requested tracker |
 | `update_issue` (write) | `edit_issues`, or `edit_own_issues` on one's own issue, on the issue's tracker |
@@ -251,6 +235,18 @@ while read-only mode is on, which is the default.
 `get_issue` respects per-field custom field visibility and filters private notes by role, as above.
 `list_users` uses `Principal.visible` rather than `User.all`, which honours each role's
 `users_visibility` setting.
+
+Parameters use one shape per concept across tools: an issue is `issue`, a numeric id; a project is
+`project`, an identifier or numeric id; a person — `assigned_to`, `author`, `user` — is a user id from
+`list_users`, or `"me"`. Filters that name a project, an issue, a version or a category through
+`filters` are authorised like the named parameters, so an invisible one is refused rather than
+answered with zero.
+
+Writes refuse rather than guess, and save nothing when they refuse: `create_issue` needs `tracker`
+when the project allows more than one, and `log_time` needs `activity`. `create_issue` and
+`update_issue` refuse by name any field or custom field, and `update_issue` any status, that the role,
+tracker or workflow does not let this user set; `log_time` does the same for custom fields. These are
+the things core would drop silently and save the rest.
 
 Arguments are checked against each tool's declared schema. A value outside a declared `enum`, below a
 declared `minimum`, of the wrong type, or missing when required is refused rather than ignored.
@@ -290,6 +286,9 @@ So an unauthenticated `GET /mcp` returns 401, not 405. That is the intended beha
 does not describe itself to anonymous callers beyond pointing them at the discovery documents.
 
 ## Client configuration
+
+For a client that takes a fixed header, such as a `curl` test. Access tokens expire after two hours,
+so this is for testing; claude.ai reads the discovery documents and runs the OAuth2 flow itself.
 
 ```json
 {
