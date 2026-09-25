@@ -34,3 +34,7 @@ Redmine::Plugin.register :redmine_mcp_plugin do
   settings default: RedmineMcpPlugin::Settings::DEFAULTS,
            partial: 'settings/redmine_mcp_plugin_settings'
 end
+
+# Doorkeeper is configured in a to_prepare block registered after the one that loads this file,
+# so its controllers must not be touched before after_initialize.
+Rails.application.config.after_initialize { RedmineMcpPlugin::DoorkeeperUrlOptions.apply }
