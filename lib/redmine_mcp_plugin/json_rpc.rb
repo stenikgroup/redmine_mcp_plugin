@@ -37,9 +37,5 @@ module RedmineMcpPlugin
     def notification?(message)
       message.is_a?(Hash) && !message.key?('id') && message['method'].present?
     end
-
-    def request?(message)
-      message.is_a?(Hash) && message.key?('id') && message['method'].present?
-    end
   end
 end

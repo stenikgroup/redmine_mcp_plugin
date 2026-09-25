@@ -8,9 +8,7 @@ module RedmineMcpPlugin
            description: 'Log spent time on an issue, or on a project when there is no issue. Time is ' \
                         'always logged for the authenticated user and cannot be logged for anyone ' \
                         'else. Activities differ per project: call list_enumerations with the project ' \
-                        'to get the ones this project accepts. Report the saved state from the reply, ' \
-                        'not what was requested. After a successful write, always finish by asking ' \
-                        'the user to check the result at the returned url.',
+                        'to get the ones this project accepts. End with the url.',
            permission: :log_time,
            write: true,
            schema: {
@@ -28,14 +26,14 @@ module RedmineMcpPlugin
                                     'description' => 'Custom field values keyed by numeric field id. Send the value, ' \
                                                      'never the label.' }
              },
-             'required' => %w[hours],
+             'required' => %w[hours activity],
              'additionalProperties' => false
            }
 
       private
 
       def perform(arguments)
-        issue = fetch_issue(arguments['issue'])
+        issue = fetch_issue(arguments['issue']) if arguments['issue'].present?
         raise ToolError, 'Pass issue, or project when there is no issue' if issue.nil? && arguments['project'].blank?
 
         project = issue ? issue.project : fetch_project(arguments['project'])
@@ -43,28 +41,16 @@ module RedmineMcpPlugin
 
         entry = TimeEntry.new(project: project, issue: issue, author: user, user: user,
                               spent_on: spent_on(arguments))
+        refuse_unknown_custom_fields!(entry, custom_field_ids(arguments))
         entry.safe_attributes = attributes_from(arguments, project)
         raise ToolError, "Could not log time: #{entry.errors.full_messages.join('; ')}" unless entry.save
 
         entry_state(entry, custom_field_ids(arguments))
       end
 
-      def fetch_issue(id)
-        return nil if id.blank?
-
-        issue = Issue.visible(user).find_by(id: id.to_i)
-        raise ToolError, "No visible issue with id #{id.inspect}" if issue.nil?
-
-        issue
-      end
-
       def attributes_from(arguments, project)
-        attributes = { 'hours' => arguments['hours'] }
+        attributes = { 'hours' => arguments['hours'], 'activity_id' => activity_for(project, arguments['activity']).id }
         attributes['comments'] = arguments['comments'].to_s if arguments.key?('comments')
-
-        if (name = arguments['activity'].presence)
-          attributes['activity_id'] = activity_for(project, name).id
-        end
 
         if (values = custom_field_values_from(arguments))
           attributes['custom_field_values'] = values

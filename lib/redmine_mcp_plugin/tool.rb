@@ -21,18 +21,22 @@ module RedmineMcpPlugin
       attr_reader :mcp_name, :mcp_title, :mcp_description, :mcp_schema,
                   :mcp_permission, :mcp_write, :mcp_destructive
 
-      def tool(name, title:, description:, schema:, permission: nil, write: false, destructive: false)
+      # `scopes` are permissions the tool checks beyond the one that gates it;
+      # they are advertised so a token can carry them, and gate nothing.
+      def tool(name, title:, description:, schema:, permission: nil, scopes: [], write: false, destructive: false)
         @mcp_name        = name.to_s
         @mcp_title       = title
         @mcp_description = description
         @mcp_schema      = schema
         @mcp_permission  = permission
+        @mcp_scopes      = scopes
         @mcp_write       = write
         @mcp_destructive = destructive
       end
 
       def write?       = !!@mcp_write
       def destructive? = !!@mcp_destructive
+      def mcp_scopes   = Array(@mcp_scopes)
 
       # Core grants some abilities through more than one permission, so any of
       # them admits the tool; the tool applies core's real rule per record.
@@ -177,6 +181,14 @@ module RedmineMcpPlugin
       project
     end
 
+    # Visibility only, like fetch_project; the caller adds authorize! for its permission.
+    def fetch_issue(id)
+      issue = Issue.visible(user).find_by(id: id.to_i)
+      raise ToolError, "No visible issue with id #{id.inspect}" if issue.nil?
+
+      issue
+    end
+
     # Both wiki tools need these three checks, in this order.
     #
     # The module check comes first because allowed_to? returns false for a
@@ -198,6 +210,18 @@ module RedmineMcpPlugin
       wiki
     end
 
+    # People are named by id or "me" everywhere. Query filters pass "me" on to
+    # core, which also adds the user's groups; writes resolve it here.
+    def user_ref!(value, name)
+      return value if value == 'me' || SchemaValidator.integerish?(value)
+
+      raise ToolError, "#{name} must be a user id from list_users, or \"me\""
+    end
+
+    def user_id_from(value, name)
+      user_ref!(value, name) == 'me' ? user.id : value.to_i
+    end
+
     def iso(time)
       time&.iso8601
     end
@@ -208,6 +232,39 @@ module RedmineMcpPlugin
       return nil if Setting.host_name.blank?
 
       Rails.application.routes.url_helpers.public_send(helper, *args, **Mailer.default_url_options)
+    end
+
+    # --- writes -------------------------------------------------------------
+
+    PARAMETER_NAMES = { 'status_id' => 'status', 'priority_id' => 'priority',
+                        'assigned_to_id' => 'assigned_to', 'custom_field_values' => 'custom_fields' }.freeze
+
+    # Core drops what the role, tracker or workflow forbids and saves the rest;
+    # name it and stop instead.
+    def refuse_unsettable!(issue, attributes)
+      unsafe = attributes.keys.reject { |key| issue.safe_attribute?(key, user) }
+      return if unsafe.empty?
+
+      raise ToolError, "Cannot set #{unsafe.map { |key| PARAMETER_NAMES.fetch(key, key) }.join(', ')} on this issue"
+    end
+
+    # Core's own rule, which also admits the author and the current assignee.
+    def assignee_id(issue, value)
+      id = user_id_from(value, 'assigned_to')
+      return id if issue.assignable_users.any? { |principal| principal.id == id }
+
+      raise ToolError, "#{id} is not assignable on #{issue.project.identifier}"
+    end
+
+    # Same reason: core keeps only the custom fields this user may edit here.
+    def refuse_unknown_custom_fields!(record, ids)
+      editable = record.editable_custom_field_values(user).map { |value| value.custom_field_id.to_s }
+      unknown  = Array(ids).map(&:to_s) - editable
+      return if unknown.empty?
+
+      names = CustomField.where(id: unknown).pluck(:id, :name).to_h
+      list  = unknown.map { |id| names[id.to_i] || "id #{id}" }.join(', ')
+      raise ToolError, "Custom fields #{list} cannot be set on this #{record.class.model_name.human.downcase}"
     end
 
     # The issue as saved, read back off the record, with the custom fields the

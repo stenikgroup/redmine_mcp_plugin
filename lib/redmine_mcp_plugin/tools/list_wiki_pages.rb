@@ -26,9 +26,8 @@ module RedmineMcpPlugin
         project = fetch_project(arguments['project'])
         wiki    = fetch_wiki(project)
 
-        # WikiPage has no .visible SQL scope in core -- only a per-record
-        # visible?, which checks the page's protection and the project's
-        # permissions. Filter in Ruby rather than inventing a scope of our own.
+        # WikiPage has no .visible SQL scope in core, only a per-record visible?
+        # that checks the project permission. Filter in Ruby rather than inventing a scope.
         pages  = wiki.pages.includes(:wiki).select { |page| page.visible?(user) }
         limit  = limit_for(arguments)
         offset = offset_for(arguments)

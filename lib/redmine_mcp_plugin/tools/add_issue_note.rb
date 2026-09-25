@@ -5,35 +5,31 @@ module RedmineMcpPlugin
     class AddIssueNote < Tool
       tool 'add_issue_note',
            title: 'Add note to issue',
-           description: 'Append a note (comment) to an existing issue. After a successful write, ' \
-                        'always finish by asking the user to check the result at the returned url.',
+           description: 'Append a note (comment) to an existing issue. End with the url.',
            permission: :add_issue_notes,
+           scopes: %i[set_notes_private],
            write: true,
            schema: {
              'type' => 'object',
              'properties' => {
-               'id' => { 'type' => 'integer', 'description' => 'Issue id.' },
+               'issue' => { 'type' => 'integer', 'description' => 'Issue id.' },
                'notes' => { 'type' => 'string', 'description' => 'The note text.' },
                'private' => { 'type' => 'boolean',
                               'description' => 'Mark the note private. Requires the set_notes_private permission.' }
              },
-             'required' => %w[id notes],
+             'required' => %w[issue notes],
              'additionalProperties' => false
            }
 
       private
 
       def perform(arguments)
-        issue = Issue.visible(user).find_by(id: arguments['id'].to_i)
-        raise ToolError, "No visible issue with id #{arguments['id'].inspect}" if issue.nil?
-
+        issue = fetch_issue(arguments['issue'])
         authorize_note!(issue)
         raise ToolError, 'notes must not be empty' if arguments['notes'].to_s.strip.empty?
 
-        # Order matters and is easy to get wrong. Issue delegates
-        # private_notes= to current_journal with allow_nil: true (issue.rb:70),
-        # so setting it before init_journal is silently swallowed and the note
-        # is created public. Create the journal first, then mark it.
+        # Issue delegates private_notes= to current_journal and swallows it when
+        # there is none, so the journal has to exist before the note is marked.
         issue.init_journal(user, arguments['notes'].to_s)
 
         if arguments['private']

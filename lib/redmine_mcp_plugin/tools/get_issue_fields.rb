@@ -48,20 +48,14 @@ module RedmineMcpPlugin
 
       def build_issue(arguments)
         if arguments['issue'].present?
-          existing_issue(arguments['issue'])
+          issue = fetch_issue(arguments['issue'])
+          authorize!(:view_issues, issue.project)
+          issue
         elsif arguments['project'].present?
           new_issue(arguments)
         else
           raise ToolError, 'Pass issue for an existing issue, or project for one not yet created'
         end
-      end
-
-      def existing_issue(id)
-        issue = Issue.visible(user).find_by(id: id.to_i)
-        raise ToolError, "No visible issue with id #{id.inspect}" if issue.nil?
-
-        authorize!(:view_issues, issue.project)
-        issue
       end
 
       def new_issue(arguments)

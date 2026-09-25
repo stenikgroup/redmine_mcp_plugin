@@ -6,10 +6,7 @@ module RedmineMcpPlugin
       tool 'create_issue',
            title: 'Create issue',
            description: 'Create a new issue in a project. Call get_issue_fields first to learn which ' \
-                        'custom fields this user may set and which values are allowed. Report the ' \
-                        'saved state from the reply, not what was requested. After a successful ' \
-                        'write, always finish by asking the user to check the result at the ' \
-                        'returned url.',
+                        'custom fields this user may set and which values are allowed. End with the url.',
            permission: :add_issues,
            write: true,
            schema: {
@@ -19,9 +16,11 @@ module RedmineMcpPlugin
                              'description' => 'Project identifier or numeric id.' },
                'subject' => { 'type' => 'string', 'description' => 'Issue subject.' },
                'description' => { 'type' => 'string' },
-               'tracker' => { 'type' => 'string', 'description' => 'Tracker name. Defaults to the project default.' },
+               'tracker' => { 'type' => 'string',
+                              'description' => 'Tracker name. Required when the project allows more than one.' },
                'priority' => { 'type' => 'string', 'description' => 'Priority name. Defaults to the Redmine default.' },
-               'assigned_to' => { 'type' => 'string', 'description' => 'Login of the user to assign to.' },
+               'assigned_to' => { 'type' => %w[integer string],
+                                  'description' => 'User id from list_users, or "me".' },
                'custom_fields' => { 'type' => 'object',
                                     'description' => 'Custom field values keyed by numeric field id, e.g. {"7": "3"}. ' \
                                                      'Send the value from get_issue_fields possible_values, never the label.' }
@@ -37,22 +36,12 @@ module RedmineMcpPlugin
         authorize!(:add_issues, project)
 
         issue = Issue.new(project: project, author: user)
-        attributes = { 'subject' => arguments['subject'].to_s,
-                       'description' => arguments['description'].to_s }
+        # The tracker decides the custom fields and the default status, so it goes first.
+        issue.tracker = tracker_for(project, issue.allowed_target_trackers(user), arguments['tracker'])
 
-        if (tracker_name = arguments['tracker'].presence)
-          tracker = project.trackers.find_by(name: tracker_name.to_s)
-          raise ToolError, "Project #{project.identifier} has no tracker named #{tracker_name.inspect}" if tracker.nil?
-
-          # add_issues is granted per tracker, and core would silently substitute
-          # a permitted one -- which an agent reports as success. Refuse instead.
-          unless issue.allowed_target_trackers(user).where(id: tracker.id).exists?
-            raise ToolError, 'You do not have permission to create issues with tracker ' \
-                             "#{tracker_name.inspect} in project #{project.identifier}"
-          end
-
-          attributes['tracker_id'] = tracker.id
-        end
+        attributes = { 'subject' => arguments['subject'].to_s }
+        # Only when sent: a tracker may disable the field, and an absent one must not trip the check.
+        attributes['description'] = arguments['description'].to_s unless arguments['description'].nil?
 
         if (priority_name = arguments['priority'].presence)
           priority = IssuePriority.active.find_by(name: priority_name.to_s)
@@ -61,21 +50,39 @@ module RedmineMcpPlugin
           attributes['priority_id'] = priority.id
         end
 
-        if (login = arguments['assigned_to'].presence)
-          assignee = project.assignable_users.find_by(login: login.to_s)
-          raise ToolError, "#{login.inspect} is not an assignable user on #{project.identifier}" if assignee.nil?
-
-          attributes['assigned_to_id'] = assignee.id
-        end
+        attributes['assigned_to_id'] = assignee_id(issue, arguments['assigned_to']) if arguments['assigned_to'].present?
 
         if (values = custom_field_values_from(arguments))
           attributes['custom_field_values'] = values
         end
 
+        refuse_unknown_custom_fields!(issue, custom_field_ids(arguments))
+        refuse_unsettable!(issue, attributes)
         issue.safe_attributes = attributes
         raise ToolError, "Could not create issue: #{issue.errors.full_messages.join('; ')}" unless issue.save
 
         issue_state(issue, custom_field_ids(arguments))
+      end
+
+      # add_issues is granted per tracker, and core would silently substitute
+      # a permitted one -- which an agent reports as success. Refuse instead.
+      def tracker_for(project, allowed, name)
+        if name.blank?
+          trackers = allowed.to_a
+          raise ToolError, 'You do not have permission to do that' if trackers.empty?
+          return trackers.first if trackers.one?
+
+          raise ToolError, "Pass tracker. #{project.identifier} allows: #{trackers.map(&:name).join(', ')}"
+        end
+
+        tracker = project.trackers.find_by(name: name.to_s)
+        raise ToolError, "Project #{project.identifier} has no tracker named #{name.inspect}" if tracker.nil?
+        unless allowed.where(id: tracker.id).exists?
+          raise ToolError, 'You do not have permission to create issues with tracker ' \
+                           "#{name.inspect} in project #{project.identifier}"
+        end
+
+        tracker
       end
     end
   end

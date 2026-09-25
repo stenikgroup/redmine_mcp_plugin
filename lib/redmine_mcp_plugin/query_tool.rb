@@ -3,12 +3,17 @@
 module RedmineMcpPlugin
   # Filtering, sorting, grouping and describing against a core Query subclass.
   # A module, not more helpers on Tool: only some tools are query-backed.
+  #
+  # A tool declares NAMED_FILTERS, its named parameters and the filter each
+  # stands for, and AUTHORISED_FILTERS, the filters that name a project, an
+  # issue or a project's record, as field => { operator => kind }.
   module QueryTool
     # Their values are the user directory or the project list; describe names
     # the paged tool that already answers those instead of inlining them.
     USER_FILTERS    = %w[assigned_to_id author_id watcher_id updated_by last_updated_by user_id].freeze
     PROJECT_FILTERS = %w[project_id subproject_id].freeze
     MAX_VALUES      = 50
+    VERSION_FIELD   = { '=' => :version }.freeze
 
     private
 
@@ -25,7 +30,23 @@ module RedmineMcpPlugin
         raise ToolError, "Operator #{operator.inspect} is not valid for #{field.inspect}. Valid: #{legal.join(', ')}"
       end
 
-      query.add_filter(field, operator, Array(values).map(&:to_s))
+      values = Array(values).map(&:to_s)
+      # Core validates only numeric and date filters; a name here matches nothing and reads as zero.
+      values.each { |value| user_ref!(value, field) if value.present? } if user_valued?(field, available)
+      query.add_filter(field, operator, values)
+    end
+
+    def explicit_filters(arguments)
+      arguments['filters'].is_a?(Hash) ? arguments['filters'] : {}
+    end
+
+    # A named parameter and its own filter would silently replace each other.
+    def reject_conflicts!(arguments, explicit)
+      self.class::NAMED_FILTERS.each do |name, field|
+        next unless arguments[name].present? && explicit.key?(field)
+
+        raise ToolError, "Pass #{name} or filters[#{field.inspect}], not both"
+      end
     end
 
     def apply_explicit_filters!(query, explicit)
@@ -40,6 +61,50 @@ module RedmineMcpPlugin
 
       [spec['operator'].presence&.to_s || '=', Array(spec['values'] || '')]
     end
+
+    # --- records named through filters --------------------------------------
+
+    # Reached through `filters`, these would skip the check the named
+    # parameters get and answer zero rather than refusing.
+    def authorize_filters!(query, explicit, permission)
+      explicit.each do |field, spec|
+        operator, values = operator_and_values(spec)
+        kind = target_kinds(query, field.to_s)[operator]
+        next if kind.nil?
+
+        ids_in(values).each { |id| authorize_target!(kind, id, permission) }
+      end
+    end
+
+    # A version-format custom field names a version, hence a project, whatever
+    # the field is called.
+    def target_kinds(query, field)
+      return self.class::AUTHORISED_FILTERS[field] if self.class::AUTHORISED_FILTERS.key?(field)
+
+      filter = query.available_filters[field]
+      filter && filter[:field]&.field_format == 'version' ? VERSION_FIELD : {}
+    end
+
+    # Some filters take a comma separated list inside a single value.
+    def ids_in(values)
+      Array(values).flat_map { |value| value.to_s.scan(/\d+/) }.uniq
+    end
+
+    def authorize_target!(kind, id, permission)
+      case kind
+      when :project  then authorize!(permission, fetch_project(id))
+      when :issue    then authorize!(permission, fetch_issue(id).project)
+      when :version  then authorize_owner!(Version.find_by(id: id.to_i), permission)
+      when :category then authorize_owner!(IssueCategory.find_by(id: id.to_i), permission)
+      end
+    end
+
+    # An id matching no record needs no check: it selects nothing either.
+    def authorize_owner!(record, permission)
+      authorize!(permission, record.project) if record&.project
+    end
+
+    # --- sort and group -----------------------------------------------------
 
     def apply_sort!(query, sort, default:, saved: false)
       if sort.blank?
@@ -112,8 +177,8 @@ module RedmineMcpPlugin
                 operators: Query.operators_by_filter_type[filter[:type]] || [] }
 
       # Returning early also skips evaluating the values lambda, a query each.
-      return entry.merge(values: nil, note: 'Ids come from list_users.')    if user_valued?(field, filter)
-      return entry.merge(values: nil, note: 'Ids come from list_projects.') if PROJECT_FILTERS.include?(field)
+      return entry.merge(values: nil, note: 'Ids come from list_users, or "me".') if user_valued?(field, filter)
+      return entry.merge(values: nil, note: 'Ids come from list_projects.')       if PROJECT_FILTERS.include?(field)
 
       values = Array(filter[:values])
       return entry if values.empty?

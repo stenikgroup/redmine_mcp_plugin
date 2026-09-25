@@ -67,9 +67,7 @@ class McpController < ApplicationController
       return head :accepted
     end
 
-    dispatcher = RedmineMcpPlugin::Dispatcher.new(
-      user: User.current, auth: @mcp_auth, protocol_version: @mcp_protocol_version
-    )
+    dispatcher = RedmineMcpPlugin::Dispatcher.new(user: User.current, auth: @mcp_auth)
     render_rpc(dispatcher.call(message), :ok)
   end
 
@@ -137,7 +135,6 @@ class McpController < ApplicationController
   # The transport requires 400 for an unsupported MCP-Protocol-Version.
   def verify_protocol_version
     header = request.headers['MCP-Protocol-Version'].presence
-    @mcp_protocol_version = header || RedmineMcpPlugin::FALLBACK_PROTOCOL_VERSION
     return if header.nil? || RedmineMcpPlugin::Protocol.supported?(header)
 
     render json: RedmineMcpPlugin::JsonRpc.error(

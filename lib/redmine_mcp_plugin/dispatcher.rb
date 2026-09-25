@@ -8,15 +8,13 @@ module RedmineMcpPlugin
   class Dispatcher
     # 2026-07-28 dropped initialize/notifications/initialized and added
     # server/discover. The older revisions are still what shipped clients speak,
-    # so both sets are answered and the negotiated version decides which shape
-    # the client gets back.
-    def initialize(user:, auth:, protocol_version:)
+    # so both sets are answered.
+    def initialize(user:, auth:)
       @user = user
       @auth = auth
-      @protocol_version = protocol_version
     end
 
-    attr_reader :user, :auth, :protocol_version
+    attr_reader :user, :auth
 
     def call(message)
       id     = message['id']
@@ -75,7 +73,9 @@ module RedmineMcpPlugin
         instructions: 'Redmine over MCP. Every tool runs as the authenticated Redmine user and is ' \
                       'limited by that user\'s project permissions, and by the OAuth2 scopes of the ' \
                       'presented token where one is used. Results are already filtered; an empty ' \
-                      'result means nothing visible matched, not that nothing exists.'
+                      'result means nothing visible matched, not that nothing exists. After a write, ' \
+                      'report the saved state from the reply, not what was requested, and ask the ' \
+                      'user to check the returned url.'
       }
     end
 

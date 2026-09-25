@@ -10,20 +10,18 @@ module RedmineMcpPlugin
            schema: {
              'type' => 'object',
              'properties' => {
-               'id' => { 'type' => 'integer', 'description' => 'Issue id.' },
+               'issue' => { 'type' => 'integer', 'description' => 'Issue id.' },
                'include_journals' => { 'type' => 'boolean',
                                        'description' => 'Include notes and change history. Defaults to true.' }
              },
-             'required' => %w[id],
+             'required' => %w[issue],
              'additionalProperties' => false
            }
 
       private
 
       def perform(arguments)
-        issue = Issue.visible(user).find_by(id: arguments['id'].to_i)
-        raise ToolError, "No visible issue with id #{arguments['id'].inspect}" if issue.nil?
-
+        issue = fetch_issue(arguments['issue'])
         authorize!(:view_issues, issue.project)
 
         payload = {

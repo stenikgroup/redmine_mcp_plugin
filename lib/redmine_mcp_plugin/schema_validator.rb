@@ -48,7 +48,7 @@ module RedmineMcpPlugin
     # Returns arguments with declared scalars converted to real Ruby types.
     #
     # Call this after validate!. The string "false" is truthy in Ruby, so a
-    # client that sends `{"assigned_to_me": "false"}` -- which check_type!
+    # client that sends `{"describe": "false"}` -- which check_type!
     # accepts, because shell-built clients send booleans as strings -- would
     # otherwise have it read as true. That is the same failure as the original
     # status enum bug: a plausible answer to a question nobody asked, with no

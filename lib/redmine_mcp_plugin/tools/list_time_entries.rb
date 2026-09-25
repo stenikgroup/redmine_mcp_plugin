@@ -7,15 +7,16 @@ module RedmineMcpPlugin
     class ListTimeEntries < Tool
       include QueryTool
 
-      # Reached through `filters`, these would otherwise skip the check the
-      # named parameters get and answer zero rather than refusing.
+      NAMED_FILTERS = { 'issue' => 'issue_id', 'user' => 'user_id', 'activity' => 'activity_id',
+                        'from' => 'spent_on', 'to' => 'spent_on' }.freeze
+
       AUTHORISED_FILTERS = {
-        'project_id' => :project,
-        'subproject_id' => :project,
-        'issue_id' => :issue,
-        'issue.parent_id' => :issue,
-        'issue.fixed_version_id' => :version,
-        'issue.category_id' => :category
+        'project_id'             => { '=' => :project },
+        'subproject_id'          => { '=' => :project },
+        'issue_id'               => { '=' => :issue, '~' => :issue },
+        'issue.parent_id'        => { '=' => :issue, '~' => :issue },
+        'issue.fixed_version_id' => { '=' => :version },
+        'issue.category_id'      => { '=' => :category }
       }.freeze
 
       tool 'list_time_entries',
@@ -66,7 +67,10 @@ module RedmineMcpPlugin
 
         # The issue decides the scope, so it has to be resolved before the query
         # is built. describe reads no entries and needs none.
-        issue  = fetch_issue(arguments['issue']) if arguments['issue'].present? && !arguments['describe']
+        issue = fetch_issue(arguments['issue']) if arguments['issue'].present? && !arguments['describe']
+        # Core omits an issue's spent time without this permission; TimeEntry
+        # .visible would answer zero instead, which reads as nobody logged any.
+        authorize!(:view_time_entries, issue.project) if issue
         scoped = scope_project(project, issue)
         # Only the project actually queried is authorised.
         authorize!(:view_time_entries, scoped) if scoped
@@ -105,7 +109,7 @@ module RedmineMcpPlugin
       def results(query, arguments, note = nil)
         limit   = limit_for(arguments)
         offset  = offset_for(arguments)
-        scope   = query.results_scope.preload(:activity, :user, :project, issue: :project)
+        scope   = query.results_scope.preload(:activity, :user, :project, :custom_values, issue: :project)
         rows    = scope.offset(offset).limit(limit).map { |entry| summarise(entry) }
 
         payload = paged(total: scope.count, offset: offset, key: :entries, rows: rows)
@@ -117,16 +121,29 @@ module RedmineMcpPlugin
       end
 
       def apply_filters!(query, arguments, issue, project)
-        explicit = arguments['filters'].is_a?(Hash) ? arguments['filters'] : {}
-        authorize_explicit!(explicit)
+        explicit = explicit_filters(arguments)
+        reject_conflicts!(arguments, explicit)
+        reject_issue_list!(explicit['issue_id'])
+        authorize_filters!(query, explicit, :view_time_entries)
 
         # No project_id filter: query.project scopes the query already.
-        set_filter!(query, 'issue_id', '=', issue.id)                        if issue
-        set_filter!(query, 'user_id', '=', arguments['user'])                if arguments['user'].present?
+        set_filter!(query, 'issue_id', '=', issue.id)                                 if issue
+        set_filter!(query, 'user_id', '=', user_ref!(arguments['user'], 'user'))      if arguments['user'].present?
         set_filter!(query, 'activity_id', '=', activity_id(project, arguments['activity'])) if arguments['activity'].present?
 
         apply_spent_on!(query, arguments)
         apply_explicit_filters!(query, explicit)
+      end
+
+      # Core reads one id for issue_id under "="; a list would be cut to the first.
+      def reject_issue_list!(spec)
+        return if spec.nil?
+
+        operator, values = operator_and_values(spec)
+        return unless operator == '=' && ids_in(values).size > 1
+
+        raise ToolError, 'filters["issue_id"] takes one id with "="; use "~" for an issue and its subtasks, ' \
+                         'or one call per issue'
       end
 
       # One filter, not two: Query#filters is keyed by field, so a second
@@ -139,53 +156,6 @@ module RedmineMcpPlugin
         elsif from    then set_filter!(query, 'spent_on', '>=', from)
         elsif to      then set_filter!(query, 'spent_on', '<=', to)
         end
-      end
-
-      # Core refuses an issue's spent time without this permission; TimeEntry
-      # .visible would instead answer zero, which reads as "nobody logged any".
-      def fetch_issue(id)
-        issue = Issue.visible(user).find_by(id: id.to_i)
-        raise ToolError, "No visible issue with id #{id.inspect}" if issue.nil?
-
-        authorize!(:view_time_entries, issue.project)
-        issue
-      end
-
-      def authorize_explicit!(explicit)
-        explicit.each do |field, spec|
-          kind = AUTHORISED_FILTERS[field.to_s]
-          next if kind.nil?
-
-          operator, values = operator_and_values(spec)
-          next unless selecting?(kind, operator)
-
-          ids_in(values).each { |id| authorize_target!(kind, id) }
-        end
-      end
-
-      # Only operators asserting "within these"; ~ on a tree filter means self
-      # and descendants.
-      def selecting?(kind, operator)
-        kind == :issue ? %w[= ~].include?(operator) : operator == '='
-      end
-
-      # Some filters take a comma separated list inside a single value.
-      def ids_in(values)
-        Array(values).flat_map { |value| value.to_s.scan(/\d+/) }.uniq
-      end
-
-      def authorize_target!(kind, id)
-        case kind
-        when :project  then authorize!(:view_time_entries, fetch_project(id))
-        when :issue    then fetch_issue(id)
-        when :version  then authorize_owner!(Version.find_by(id: id.to_i))
-        when :category then authorize_owner!(IssueCategory.find_by(id: id.to_i))
-        end
-      end
-
-      # An id matching no record needs no check: it selects nothing either.
-      def authorize_owner!(record)
-        authorize!(:view_time_entries, record.project) if record&.project
       end
 
       # The filter matches the system activity, so a project override resolves
@@ -208,7 +178,8 @@ module RedmineMcpPlugin
           project: entry.project && { id: entry.project_id, identifier: entry.project.identifier,
                                       name: entry.project.name },
           issue: issue_field(entry),
-          comments: entry.comments
+          comments: entry.comments,
+          custom_fields: custom_fields_for(entry)
         }
       end
 
@@ -218,6 +189,13 @@ module RedmineMcpPlugin
         return nil if entry.issue.nil?
 
         { id: entry.issue_id, subject: (entry.issue.subject if entry.issue.visible?(user)) }
+      end
+
+      # Core's own rule, which honours the roles a field is restricted to.
+      def custom_fields_for(entry)
+        entry.visible_custom_field_values(user).map do |value|
+          { id: value.custom_field_id, name: value.custom_field.name, value: value.value }
+        end
       end
     end
   end

@@ -7,6 +7,25 @@ module RedmineMcpPlugin
     class SearchIssues < Tool
       include QueryTool
 
+      NAMED_FILTERS = { 'status' => 'status_id', 'query' => 'any_searchable', 'tracker' => 'tracker_id',
+                        'priority' => 'priority_id', 'version' => 'fixed_version_id',
+                        'assigned_to' => 'assigned_to_id', 'author' => 'author_id',
+                        'created_since' => 'created_on', 'updated_since' => 'updated_on',
+                        'due_before' => 'due_date' }.freeze
+
+      # A relation filter names issues under "=" and a project under "=p".
+      RELATION = { '=' => :issue, '=p' => :project }.freeze
+
+      AUTHORISED_FILTERS = {
+        'project_id'       => { '=' => :project },
+        'subproject_id'    => { '=' => :project },
+        'issue_id'         => { '=' => :issue },
+        'parent_id'        => { '=' => :issue, '~' => :issue },
+        'child_id'         => { '=' => :issue, '~' => :issue },
+        'fixed_version_id' => { '=' => :version },
+        'category_id'      => { '=' => :category }
+      }.merge(IssueRelation::TYPES.keys.to_h { |type| [type, RELATION] }).freeze
+
       tool 'search_issues',
            title: 'Search issues',
            description: 'Search issues visible to the authenticated user. All filters are optional ' \
@@ -29,9 +48,10 @@ module RedmineMcpPlugin
                'tracker' => { 'type' => 'string', 'description' => 'Tracker name, e.g. Bug.' },
                'priority' => { 'type' => 'string', 'description' => 'Priority name.' },
                'version' => { 'type' => 'string', 'description' => 'Target version name. Needs project.' },
-               'assigned_to_me' => { 'type' => 'boolean', 'description' => 'Only issues assigned to the authenticated user.' },
-               'assigned_to_id' => { 'type' => 'integer', 'description' => 'User id of the assignee, from list_users.' },
-               'author_id' => { 'type' => 'integer', 'description' => 'User id of the author, from list_users.' },
+               'assigned_to' => { 'type' => %w[integer string],
+                                  'description' => 'Assignee: a user id from list_users, or "me".' },
+               'author' => { 'type' => %w[integer string],
+                             'description' => 'Author: a user id from list_users, or "me".' },
                'created_since' => { 'type' => 'string', 'description' => 'Only issues created on or after this ISO-8601 date.' },
                'updated_since' => { 'type' => 'string', 'format' => 'date',
                                     'description' => 'Only issues updated on or after this ISO-8601 date.' },
@@ -75,7 +95,9 @@ module RedmineMcpPlugin
 
         limit   = limit_for(arguments)
         offset  = offset_for(arguments)
-        rows    = query.issues(offset: offset, limit: limit).map { |issue| summarise(issue) }
+        # Core preloads only the query's columns; the rows name these too.
+        rows    = query.issues(offset: offset, limit: limit, include: %i[author tracker assigned_to])
+                       .map { |issue| summarise(issue) }
         payload = paged(total: query.issue_count, offset: offset, key: :issues, rows: rows)
         # Counted in SQL over the whole filtered set, not the page.
         payload[:groups] = group_rows(query.result_count_by_group) if query.grouped?
@@ -97,8 +119,9 @@ module RedmineMcpPlugin
       end
 
       def apply_filters!(query, arguments, project)
-        explicit = arguments['filters'].is_a?(Hash) ? arguments['filters'] : {}
+        explicit = explicit_filters(arguments)
         reject_conflicts!(arguments, explicit)
+        authorize_filters!(query, explicit, :view_issues)
 
         case arguments['status'].presence
         when 'closed' then set_filter!(query, 'status_id', 'c')
@@ -107,9 +130,8 @@ module RedmineMcpPlugin
         end
 
         set_filter!(query, 'any_searchable', '~', arguments['query']) if arguments['query'].present?
-        set_filter!(query, 'assigned_to_id', '=', 'me')              if arguments['assigned_to_me']
-        set_filter!(query, 'assigned_to_id', '=', arguments['assigned_to_id']) if arguments['assigned_to_id'].present?
-        set_filter!(query, 'author_id', '=', arguments['author_id']) if arguments['author_id'].present?
+        set_filter!(query, 'assigned_to_id', '=', user_ref!(arguments['assigned_to'], 'assigned_to')) if arguments['assigned_to'].present?
+        set_filter!(query, 'author_id', '=', user_ref!(arguments['author'], 'author'))                if arguments['author'].present?
 
         set_filter!(query, 'tracker_id', '=', tracker_id(arguments['tracker']))   if arguments['tracker'].present?
         set_filter!(query, 'priority_id', '=', priority_id(arguments['priority'])) if arguments['priority'].present?
@@ -120,15 +142,6 @@ module RedmineMcpPlugin
         set_filter!(query, 'due_date', '<=', iso_date(arguments['due_before'], 'due_before')) if arguments['due_before'].present?
 
         apply_explicit_filters!(query, explicit)
-      end
-
-      def reject_conflicts!(arguments, explicit)
-        if arguments['status'].present? && explicit.key?('status_id')
-          raise ToolError, 'Pass status or filters["status_id"], not both'
-        end
-        return unless arguments['assigned_to_me'] && arguments['assigned_to_id'].present?
-
-        raise ToolError, 'Pass assigned_to_me or assigned_to_id, not both'
       end
 
       # --- named filter resolution -------------------------------------------
