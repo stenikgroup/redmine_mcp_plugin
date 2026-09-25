@@ -7,6 +7,18 @@ module RedmineMcpPlugin
     class ListTimeEntries < Tool
       include QueryTool
 
+      # Filters whose values name a project or an issue, or a record belonging
+      # to one. Reached through `filters` they would otherwise skip the check
+      # the named parameters get, and answer zero instead of refusing.
+      AUTHORISED_FILTERS = {
+        'project_id' => :project,
+        'subproject_id' => :project,
+        'issue_id' => :issue,
+        'issue.parent_id' => :issue,
+        'issue.fixed_version_id' => :version,
+        'issue.category_id' => :category
+      }.freeze
+
       tool 'list_time_entries',
            title: 'List spent time',
            description: 'List and total the time entries visible to the authenticated user. ' \
@@ -85,14 +97,35 @@ module RedmineMcpPlugin
 
       def apply_filters!(query, arguments, project)
         explicit = arguments['filters'].is_a?(Hash) ? arguments['filters'] : {}
+        authorize_explicit!(explicit)
 
-        set_filter!(query, 'project_id', '=', project.id)                    if project
-        set_filter!(query, 'issue_id', '=', issue_id(arguments['issue']))    if arguments['issue'].present?
+        # No project_id filter: query.project scopes the query already, and
+        # TimeEntryQuery only registers project_id when it has none
+        # (time_entry_query.rb:52).
+        apply_issue!(query, arguments, project)
         set_filter!(query, 'user_id', '=', arguments['user'])                if arguments['user'].present?
         set_filter!(query, 'activity_id', '=', activity_id(project, arguments['activity'])) if arguments['activity'].present?
 
         apply_spent_on!(query, arguments)
         apply_explicit_filters!(query, explicit)
+      end
+
+      def apply_issue!(query, arguments, project)
+        return if arguments['issue'].blank?
+
+        issue = fetch_issue(arguments['issue'])
+        reject_mismatch!(project, issue)
+        set_filter!(query, 'issue_id', '=', issue.id)
+      end
+
+      # Two filters that exclude each other return zero, which reads as "no
+      # time logged" rather than "that pair is impossible". Descendants count,
+      # because project_statement can include them (query.rb:975).
+      def reject_mismatch!(project, issue)
+        return if project.nil?
+        return if issue.project == project || issue.project.is_descendant_of?(project)
+
+        raise ToolError, "Issue ##{issue.id} is not in project #{project.identifier}"
       end
 
       # One filter, not two: Query#filters is keyed by field, so a second
@@ -107,11 +140,58 @@ module RedmineMcpPlugin
         end
       end
 
-      def issue_id(id)
+      # Core's spent-time page for an issue is the project-scoped timelog
+      # (queries_helper.rb:279), which 403s without view_time_entries there
+      # (application_controller.rb:323). Without this, TimeEntry.visible removes
+      # every row and the reply reads as "nobody logged time on this issue".
+      def fetch_issue(id)
         issue = Issue.visible(user).find_by(id: id.to_i)
         raise ToolError, "No visible issue with id #{id.inspect}" if issue.nil?
 
-        issue.id
+        authorize!(:view_time_entries, issue.project)
+        issue
+      end
+
+      # --- filters that name a project or an issue ----------------------------
+
+      def authorize_explicit!(explicit)
+        explicit.each do |field, spec|
+          kind = AUTHORISED_FILTERS[field.to_s]
+          next if kind.nil?
+
+          operator, values = operator_and_values(spec)
+          next unless selecting?(kind, operator)
+
+          ids_in(values).each { |id| authorize_target!(kind, id) }
+        end
+      end
+
+      # Only operators that assert "within these". For !, !* and * no single
+      # project is being asked about. The tree filters also take ~, which means
+      # self and descendants (time_entry_query.rb:200).
+      def selecting?(kind, operator)
+        kind == :issue ? %w[= ~].include?(operator) : operator == '='
+      end
+
+      # issue.parent_id takes a comma separated list inside one value
+      # (time_entry_query.rb:236); the others take one id per value.
+      def ids_in(values)
+        Array(values).flat_map { |value| value.to_s.scan(/\d+/) }.uniq
+      end
+
+      def authorize_target!(kind, id)
+        case kind
+        when :project  then authorize!(:view_time_entries, fetch_project(id))
+        when :issue    then fetch_issue(id)
+        when :version  then authorize_owner!(Version.find_by(id: id.to_i))
+        when :category then authorize_owner!(IssueCategory.find_by(id: id.to_i))
+        end
+      end
+
+      # A version or a category names its project. An id matching no record
+      # needs no check: the filter selects nothing either.
+      def authorize_owner!(record)
+        authorize!(:view_time_entries, record.project) if record&.project
       end
 
       # The filter matches the system activity, so a project override resolves
