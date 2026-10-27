@@ -10,7 +10,7 @@
 # only mechanism needed, and a mismatch fails loudly at boot rather than
 # half-loading.
 module RedmineMcpPlugin
-  VERSION = '0.1.0'
+  VERSION = '0.2.0'
 
   # Protocol revisions this server can speak, newest first.
   #

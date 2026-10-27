@@ -39,7 +39,9 @@ module RedmineMcpPlugin
                'remove_watcher_users' => { 'type' => 'array', 'description' => 'User or group ids, or "me".' },
                'add_tag_list' => { 'type' => 'array', 'description' => 'Tag names.' },
                'remove_tag_list' => { 'type' => 'array', 'description' => 'Tag names.' },
-               'custom_field_values' => { 'type' => 'object', 'description' => 'By field id; the value, never the label.' },
+               'custom_field_values' => { 'type' => 'object',
+                                         'description' => 'By field id from get_issue_fields; a value, or its label ' \
+                                                          'when it names one value.' },
                'notes' => { 'type' => 'string', 'description' => 'Note recorded with this change.' }
              },
              'required' => %w[issue],
@@ -80,6 +82,9 @@ module RedmineMcpPlugin
 
         # Indifferent access: the tags plugin reads its keys as symbols.
         issue.safe_attributes = attributes.merge(tags).with_indifferent_access
+        # Once the status and tracker are set: a workflow may require a field
+        # at the new status, and a tracker move makes core recheck them all.
+        require_issue_custom_fields!(issue)
         journal_tags!(issue) if tags.any?
         Issue.transaction do
           raise ToolError, "Could not update issue: #{issue.errors.full_messages.join('; ')}" unless issue.save

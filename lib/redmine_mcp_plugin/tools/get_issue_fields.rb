@@ -60,7 +60,7 @@ module RedmineMcpPlugin
           payload[:done_ratio_note] = 'redmine_checklists computes it once the issue has checklist items'
         end
         if user.allowed_to?(:add_issue_watchers, project)
-          payload[:addable_watcher_users] = issue.addable_watcher_users.map { |p| principal_row(p) }
+          payload[:addable_watcher_users] = addable_watcher_users(issue).map { |p| principal_row(p) }
         end
         if plugin?(:redmine_checklists)
           payload[:checklists] = { edit: user.allowed_to?(:edit_checklists, project),
@@ -124,32 +124,7 @@ module RedmineMcpPlugin
       end
 
       def custom_fields_for(issue)
-        required = issue.required_attribute_names(user)
-        issue.editable_custom_field_values(user).map do |value|
-          field = value.custom_field
-          {
-            id: field.id,
-            name: field.name,
-            format: field.field_format,
-            # The definition flag, or a workflow rule that requires it for this
-            # user on this tracker alone.
-            required: field.is_required? || required.include?(field.id.to_s),
-            multiple: field.multiple?,
-            # True for a long text field with text formatting on: its value takes markup.
-            rendered: field.full_text_formatting?,
-            default_value: field.default_value,
-            possible_values: possible_values_for(field, issue)
-          }
-        end
-      end
-
-      # Core gives plain strings for a list field, and [label, value] pairs for
-      # the formats stored as ids and for bool.
-      def possible_values_for(field, issue)
-        field.possible_values_options(issue).map do |option|
-          label, value = option.is_a?(Array) ? option : [option, option]
-          { value: value.to_s, label: label.to_s }
-        end
+        custom_field_rows(issue, issue.required_attribute_names(user))
       end
 
       # Tags are global; the plugin's own list, capped so a big instance stays readable.

@@ -4,18 +4,43 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that runs ins
 plugin. It adds one endpoint, `POST /mcp`, and authenticates it with Redmine's own mechanisms. Every
 tool runs as a real Redmine user and is limited by that user's permissions.
 
-Version 0.1.0. Read-only by default.
+Version 0.2.0. Read-only by default. See [CHANGELOG.md](CHANGELOG.md).
 
-Target platform, which is what we run:
+## A fork of a fork
 
-| | |
-|---|---|
-| Redmine | 6.1.2 |
-| Rails | 7.2.3 (pinned by Redmine 6.1.2's `Gemfile`) |
-| Ruby | 3.3.11, via rbenv |
+This repository, [herewithme/redmine_mcp_plugin](https://github.com/herewithme/redmine_mcp_plugin),
+is the third link in a chain:
 
-`init.rb` declares a floor of Redmine 6.1.0, which is where OAuth2 (Doorkeeper) support lands. We
-develop and run against 6.1.2 and do not test anything else.
+1. [joaoperfig/redmine_mcp_plugin](https://github.com/joaoperfig/redmine_mcp_plugin), by João
+   Figueira: the original plugin - the `/mcp` endpoint on Redmine's own authentication and
+   permissions, schema validation, paging and OAuth2 discovery.
+2. [stenikgroup/redmine_mcp_plugin](https://github.com/stenikgroup/redmine_mcp_plugin), by Stenik
+   (Stoyan Tinchev), forked from the first: write tools, every issue field, relations, news,
+   attachments, checklists and tags, narrowed OAuth2 scopes, the Doorkeeper fix and extensions.
+   Most of this README is theirs, and "we" and "our" in it describe their deployment.
+3. This fork, by Be API (Amaury Balmer), forked from the second: Redmine 7.0 compatibility, a
+   working test suite, and custom field values checked before a write. See the changelog.
+
+## Compatibility
+
+Checked with version 0.2.0 on 2026-10-27:
+
+| Redmine | Rails | Ruby |
+|---|---|---|
+| 6.1.2 | 7.2.3 | 3.3 |
+| 7.0.2 | 8.1.4 | 3.3 |
+
+On each, the test suite passes and every tool was exercised live, over an API key and over a scoped
+OAuth2 token. Rails is the version each Redmine pins in its `Gemfile`. `init.rb` declares a floor of
+Redmine 6.1.0, which is where OAuth2 (Doorkeeper) support lands. Redmine 7.0 removed
+`Issue#addable_watcher_users`; the plugin rebuilds that list itself from core scopes that exist on
+both versions.
+
+Be API runs this fork in production on Redmine trunk, with Rails 8.1.4 and Ruby 3.2.3. The test
+suite is not run there: trunk and Ruby 3.2 are covered by live use only, and a core removal reaches
+trunk before any release.
+
+Before this fork, stenikgroup developed and ran the plugin on Redmine 6.1.2 with Ruby 3.3.11.
 
 ## Deployment
 
@@ -23,7 +48,7 @@ Redmine runs under Phusion Passenger inside nginx. The plugin is cloned as the `
 user:
 
 ```bash
-sudo -u redmine git clone https://github.com/stenikgroup/redmine_mcp_plugin.git \
+sudo -u redmine git clone https://github.com/herewithme/redmine_mcp_plugin.git \
   /path/to/redmine/plugins/redmine_mcp_plugin
 sudo systemctl restart nginx
 ```
@@ -107,7 +132,7 @@ An extension adds the permissions of its tools in the same way; see Extensions.
 
 ## Local patches
 
-Two changes are ours, both in this repository.
+Two changes came from the stenikgroup fork and are not in the original plugin.
 
 ### `supported_scopes`
 
@@ -265,7 +290,7 @@ while read-only mode is on, which is the default.
 | `list_queries` | `view_issues`. Saved queries, filtered by `IssueQuery.visible` |
 | `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
 | `list_news`, `get_news` | `view_news`. Filtered by `News.visible`; with a project, that project's own news, as core's index |
-| `list_enumerations` | none. Trackers, statuses, priorities, time entry activities |
+| `list_enumerations` | none. Trackers, statuses, priorities, time entry activities; with `project`, that project's activities and, for a caller with `log_time` there, the time entry custom fields with their required flag and allowed values |
 | `list_users` | none. Filtered by `Principal.visible` |
 | `list_time_entries` | `view_time_entries`. Totals, per-group hours and each entry's custom fields, filtered by `TimeEntry.visible` |
 | `get_issue_fields` | `view_issues`. What the caller may set on an issue, before a write; with `issue` and `tracker`, what it would be under that tracker, refused as `update_issue` refuses the move |
@@ -310,10 +335,27 @@ tracker, workflow, a setting or a plugin permission does not let this user set, 
 permission the label to ask for, in the caller's language, as in "is_private (needs Set issues public
 or private)". The refusal
 stays the uniform "You do not have permission to do that" when the caller may not use the tool or
-edit the issue at all. `log_time` refuses custom fields by name as before. These are
+edit the issue at all. These are
 the things core would drop silently and save the rest. A `parent` that is invisible, circular, or
 outside the cross-project subtasks setting is refused by cause, where core would say only "Parent task
 is invalid".
+
+Custom field values are checked before the save, on `create_issue`, `update_issue` and `log_time`
+alike, so a wrong one costs one refusal that teaches the fix rather than core's bare "is not included
+in the list" or "cannot be blank". A field the caller may not set is refused by name. For a format
+with a list of values (list, key/value list, user, version, bool), a value is the stored one (the
+option, the id, `1` or `0`); a label that names exactly one value is accepted in its place, case
+aside, as are `"me"` for a user field and `true`/`false` for a bool, and the value already stored
+stays accepted, as core keeps it. Anything else is refused with the field's name, its id and up to
+25 accepted values with their labels. A required field left blank is refused the same way, with its
+choices, exactly when core would refuse it: on a new issue or time entry every required field is
+checked, as core validates them all; on an update, a field a workflow rule requires is checked at
+every save, with the rules of the status being set rather than the stored one, and a field required
+by its own flag once a custom field is sent or the tracker changes, since core rechecks the flag
+only then. An update that changes none of that saves as core does, blank field included. Required
+means the field's own flag or, on an issue, a workflow rule for this user on this tracker and
+status. The choices come from the same core call as `get_issue_fields` and `list_enumerations`
+report, so the refusal and the listing never disagree.
 
 `create_issue` and `update_issue` take every field of core's issue form: the standard attributes,
 custom fields, watchers, and with the plugins below tags; checklist items only through
@@ -517,6 +559,6 @@ so this is for testing; claude.ai reads the discovery documents and runs the OAu
 
 GPL-2. See [LICENSE](LICENSE).
 
-This project began as [joaoperfig/redmine_mcp_plugin](https://github.com/joaoperfig/redmine_mcp_plugin)
-and is maintained here as our own; the original copyright notices are preserved as the licence
-requires.
+This project began as [joaoperfig/redmine_mcp_plugin](https://github.com/joaoperfig/redmine_mcp_plugin),
+continued as [stenikgroup/redmine_mcp_plugin](https://github.com/stenikgroup/redmine_mcp_plugin), and
+is maintained here; the original copyright notices are preserved as the licence requires.
