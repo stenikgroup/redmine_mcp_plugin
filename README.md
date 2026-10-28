@@ -260,7 +260,7 @@ while read-only mode is on, which is the default.
 |---|---|
 | `whoami` | none. Reports identity, auth mode and granted scopes |
 | `list_projects`, `get_project` | `view_project` |
-| `search_issues`, `get_issue` | `view_issues`. `get_issue` adds the attachments, the subtasks the caller can see, the relations whose other issue the caller can see, the watchers under `view_issue_watchers`, the checklist under `view_checklists`, and the tags |
+| `search_issues`, `get_issue` | `view_issues`. `get_issue` adds the attachments the caller may open (core's `Attachment#visible?`, as `get_attachment`), the subtasks the caller can see, the relations whose other issue the caller can see, the watchers under `view_issue_watchers`, the checklist under `view_checklists`, and the tags |
 | `get_attachment` | `view_issues`, through core's `Attachment#visible?`. Metadata, and the content of a text file within `file_max_size_displayed` |
 | `list_queries` | `view_issues`. Saved queries, filtered by `IssueQuery.visible` |
 | `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
@@ -330,7 +330,7 @@ computes it from the status. Watchers are added and removed explicitly; nothing 
 Every write reply is read back from the database after the save and the plugins' hooks, so it never
 claims a value that is not stored.
 
-Attachments: `get_issue` lists them, `get_attachment` reads a text file within
+Attachments: `get_issue` lists those the caller may open, `get_attachment` reads a text file within
 `file_max_size_displayed` and reports a binary or larger file as omitted, and `add_issue_attachment`
 adds a text file through core's token path, so `attachment_max_size` and the extension lists apply.
 It saves the attachment with a journal, and Redmine mails the watchers when `issue_updated` or

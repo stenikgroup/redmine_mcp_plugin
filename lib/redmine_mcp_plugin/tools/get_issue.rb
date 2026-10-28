@@ -55,7 +55,7 @@ module RedmineMcpPlugin
           created_on: iso(issue.created_on),
           updated_on: iso(issue.updated_on),
           custom_fields: visible_custom_fields(issue),
-          attachments: issue.attachments.map { |attachment| attachment_row(attachment) },
+          attachments: attachment_rows(issue),
           relations: relation_rows(issue)
         }
 
@@ -80,6 +80,12 @@ module RedmineMcpPlugin
       # Direct subtasks in the tree's order, only those the user may see, as on the issue page.
       def child_rows(issue)
         issue.children.select { |child| child.visible?(user) }.map { |child| { id: child.id, subject: child.subject } }
+      end
+
+      # By Attachment#visible?, as downloads and get_attachment check it: a file the user may not open is
+      # not listed either, as its name, author and description can tell what its content would.
+      def attachment_rows(issue)
+        issue.attachments.select { |attachment| attachment.visible?(user) }.map { |attachment| attachment_row(attachment) }
       end
 
       # Journal#notes can be private (private_notes), and core gates that on
