@@ -34,7 +34,7 @@ class McpMetadataController < ApplicationController
       scopes_supported: supported_scopes,
       bearer_methods_supported: %w[header],
       resource_name: 'Redmine MCP Server',
-      resource_documentation: 'https://github.com/stenikgroup/redmine_mcp_plugin'
+      resource_documentation: 'https://github.com/herewithme/redmine_mcp_plugin'
     }
   end
 

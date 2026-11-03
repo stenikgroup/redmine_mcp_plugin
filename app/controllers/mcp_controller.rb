@@ -23,6 +23,16 @@ class McpController < ApplicationController
   before_action :authenticate_mcp_request
   before_action :verify_protocol_version
 
+  # Core's before_actions read params ahead of handle, and Rails parses an application/json body on
+  # that first read: a malformed body raises here, never in handle's own JSON.parse. Same answer.
+  # Rails does not remember the failure, and rendering reads params again (core 6.1 asks
+  # api_request? while choosing the layout), so the body is declared empty first or the handler
+  # itself raises and Rails answers with its own 400.
+  rescue_from ActionDispatch::Http::Parameters::ParseError do
+    request.request_parameters = {}
+    render_rpc(RedmineMcpPlugin::JsonRpc.error(nil, RedmineMcpPlugin::JsonRpc::PARSE_ERROR, 'Parse error'), :bad_request)
+  end
+
   # POST carries every JSON-RPC message.
   def handle
     body = request.body.read.to_s

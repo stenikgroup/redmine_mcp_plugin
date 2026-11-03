@@ -11,7 +11,10 @@ module RedmineMcpPlugin
                    'presented token where one is used. Results are already filtered; an empty ' \
                    'result means nothing visible matched, not that nothing exists. After a write, ' \
                    'report the saved state from the reply, not what was requested, and ask the ' \
-                   'user to check the returned url.'
+                   'user to check the returned url. Before create_issue or update_issue call ' \
+                   'get_issue_fields, and before log_time call list_enumerations with the project: ' \
+                   'they list the fields, the required ones and their allowed values, so never guess ' \
+                   'a status, an activity or a custom field value.'
 
     # 2026-07-28 dropped initialize/notifications/initialized and added
     # server/discover. The older revisions are still what shipped clients speak,

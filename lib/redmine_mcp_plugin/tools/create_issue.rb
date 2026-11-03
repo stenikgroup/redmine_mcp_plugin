@@ -37,7 +37,9 @@ module RedmineMcpPlugin
                'is_private' => { 'type' => 'boolean' },
                'watcher_users' => { 'type' => 'array', 'description' => 'User or group ids, or "me".' },
                'tag_list' => { 'type' => 'array', 'description' => 'Tag names.' },
-               'custom_field_values' => { 'type' => 'object', 'description' => 'By field id; the value, never the label.' }
+               'custom_field_values' => { 'type' => 'object',
+                                         'description' => 'By field id from get_issue_fields; a value, or its label ' \
+                                                          'when it names one value.' }
              },
              'required' => %w[project subject],
              'additionalProperties' => false
@@ -61,6 +63,8 @@ module RedmineMcpPlugin
 
         # Indifferent access: the tags plugin reads its keys as symbols.
         issue.safe_attributes = attributes.merge(tags).with_indifferent_access
+        # Once the status is set: a workflow may require a field there.
+        require_issue_custom_fields!(issue)
         raise ToolError, "Could not create issue: #{issue.errors.full_messages.join('; ')}" unless issue.save
 
         issue_state(stored(issue), arguments)

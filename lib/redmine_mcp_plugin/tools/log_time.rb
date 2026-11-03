@@ -7,8 +7,10 @@ module RedmineMcpPlugin
            title: 'Log spent time',
            description: 'Log spent time on an issue, or on a project when there is no issue. Time is ' \
                         'always logged for the authenticated user and cannot be logged for anyone ' \
-                        'else. Activities differ per project: call list_enumerations with the project ' \
-                        'to get the ones this project accepts. End with the url.',
+                        'else. Call list_enumerations with the project first: activities differ per ' \
+                        'project, and it lists the custom fields a time entry needs there, with the ' \
+                        'required ones and their allowed values. If refused, tell the user and ask ' \
+                        'rather than guess. End with the url.',
            permission: :log_time,
            plain: %w[comments],
            write: true,
@@ -23,7 +25,9 @@ module RedmineMcpPlugin
                                'description' => 'Activity name, from list_enumerations for this project.' },
                'spent_on' => { 'type' => 'string', 'description' => 'ISO-8601 date. Defaults to today.' },
                'comments' => { 'type' => 'string', 'description' => 'What the time was spent on.' },
-               'custom_field_values' => { 'type' => 'object', 'description' => 'By field id; the value, never the label.' }
+               'custom_field_values' => { 'type' => 'object',
+                                         'description' => 'By field id from list_enumerations with the project; ' \
+                                                          'a value, or its label when it names one value.' }
              },
              'required' => %w[hours activity],
              'additionalProperties' => false
@@ -40,20 +44,19 @@ module RedmineMcpPlugin
 
         entry = TimeEntry.new(project: project, issue: issue, author: user, user: user,
                               spent_on: spent_on(arguments))
-        refuse_unknown_custom_fields!(entry, custom_field_ids(arguments))
-        entry.safe_attributes = attributes_from(arguments, project)
+        entry.safe_attributes = attributes_from(entry, arguments, project)
+        require_custom_fields!(entry)
         raise ToolError, "Could not log time: #{entry.errors.full_messages.join('; ')}" unless entry.save
 
         entry_state(entry, custom_field_ids(arguments))
       end
 
-      def attributes_from(arguments, project)
+      def attributes_from(entry, arguments, project)
         attributes = { 'hours' => arguments['hours'], 'activity_id' => activity_for(project, arguments['activity']).id }
         attributes['comments'] = arguments['comments'].to_s if arguments.key?('comments')
 
-        if (values = custom_field_values_from(arguments['custom_field_values']))
-          attributes['custom_field_values'] = values
-        end
+        values = custom_field_values_for(entry, arguments['custom_field_values'])
+        attributes['custom_field_values'] = values if values
 
         attributes
       end
