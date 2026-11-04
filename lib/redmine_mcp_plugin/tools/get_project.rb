@@ -6,7 +6,7 @@ module RedmineMcpPlugin
       tool 'get_project',
            title: 'Get project',
            description: 'Fetch one project by identifier or numeric id, with its enabled modules, trackers, ' \
-                        'issue categories, versions and the project custom fields visible to the caller.',
+                        "issue categories, versions and the project custom fields visible to the caller. #{CUSTOM_FIELD_LABELS}",
            permission: :view_project,
            schema: {
              'type' => 'object',
@@ -40,7 +40,7 @@ module RedmineMcpPlugin
           issue_categories: project.issue_categories.map { |c| { id: c.id, name: c.name } },
           versions: project.shared_versions.map { |v| { id: v.id, name: v.name, status: v.status } },
           # Core's own rule, which honours the roles a field is restricted to.
-          custom_fields: project.visible_custom_field_values(user).map { |value| custom_field_row(value) }
+          custom_fields: custom_field_value_rows(project.visible_custom_field_values(user))
         }
       end
     end

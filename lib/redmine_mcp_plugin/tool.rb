@@ -912,18 +912,67 @@ module RedmineMcpPlugin
     end
 
     def saved_custom_fields(record, ids)
-      Array(ids).filter_map do |id|
-        value = record.custom_field_values.detect { |v| v.custom_field_id.to_s == id.to_s }
-        next if value.nil?
-
-        custom_field_row(value)
+      values = Array(ids).filter_map do |id|
+        record.custom_field_values.detect { |v| v.custom_field_id.to_s == id.to_s }
       end
+      custom_field_value_rows(values)
+    end
+
+    # The formats that store a record id as their value. A list field stores
+    # the label itself, so it gets none.
+    LABELLED_FORMATS = %w[enumeration user version].freeze
+    # Appended to the description of every tool that returns custom fields.
+    CUSTOM_FIELD_LABELS = 'Each custom field gives its format; one stored as an id (enumeration, user, version) ' \
+                          'also names it in label, null for a target the caller may not see or that was deleted.'
+
+    # Rows for any number of custom field values, from one record or a page of
+    # them, with the labels looked up in one query per format.
+    def custom_field_value_rows(values)
+      labels = custom_value_labels(values)
+      values.map { |value| custom_field_row(value, labels) }
     end
 
     # Core keeps an empty multiple field as [nil]; its API leaves blank values out, and so does this.
-    def custom_field_row(value)
+    # `value` stays the stored id, as the write tools take it; `label` names it.
+    def custom_field_row(value, labels)
+      field = value.custom_field
       shown = value.value.is_a?(Array) ? value.value.reject(&:blank?) : value.value
-      { id: value.custom_field_id, name: value.custom_field.name, value: shown }
+      row   = { id: field.id, name: field.name, format: field.field_format, value: shown }
+      return row unless LABELLED_FORMATS.include?(field.field_format)
+
+      label = ->(id) { labels[[field.id, id.to_s]] }
+      row[:label] = shown.is_a?(Array) ? shown.map(&label) : (label.call(shown) if shown.present?)
+      row
+    end
+
+    # Labels keyed by [custom field id, stored id].
+    def custom_value_labels(values)
+      wanted = values.flat_map do |value|
+        format = value.custom_field.field_format
+        next [] unless LABELLED_FORMATS.include?(format)
+
+        Array(value.value).reject(&:blank?).map { |id| [format, value.custom_field_id, id.to_s] }
+      end
+      wanted.group_by(&:first).each_with_object({}) do |(format, group), labels|
+        labels.merge!(custom_value_names(format, group.map { |_, field_id, id| [field_id, id] }))
+      end
+    end
+
+    # A user the caller may not see, as list_users applies it, and a version
+    # whose issues they may not see stay unnamed, as does a target deleted
+    # since: the pair maps to nil. An enumeration is the field's own, inactive
+    # ones included, as core still shows a value it no longer offers.
+    def custom_value_names(format, pairs)
+      ids = pairs.map(&:last).uniq
+      if format == 'enumeration'
+        return CustomFieldEnumeration.where(id: ids, custom_field_id: pairs.map(&:first).uniq)
+                                     .pluck(:custom_field_id, :id, :name)
+                                     .to_h { |field_id, id, name| [[field_id, id.to_s], name] }
+      end
+
+      scope = format == 'user' ? User.visible(user) : Version.visible(user)
+      names = scope.where(id: ids).to_h { |record| [record.id.to_s, record.name] }
+      pairs.to_h { |pair| [pair, names[pair.last]] }
     end
 
     # SchemaValidator does not walk into an object, so the shape is checked here.

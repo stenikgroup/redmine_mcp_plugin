@@ -7,7 +7,7 @@ class McpControllerTest < Redmine::ControllerTest
   fixtures :projects, :users, :email_addresses, :roles, :members, :member_roles,
            :issues, :issue_statuses, :trackers, :enumerations, :enabled_modules, :watchers,
            :projects_trackers, :workflows, :custom_fields, :custom_fields_trackers,
-           :custom_fields_projects, :custom_values, :time_entries
+           :custom_fields_projects, :custom_values, :time_entries, :versions
 
   def setup
     Setting.rest_api_enabled = '1'
@@ -411,5 +411,106 @@ class McpControllerTest < Redmine::ControllerTest
     queries.call(1) # warm the settings and role caches
     assert_operator Project.visible(User.find(2)).count, :>, 2
     assert_equal queries.call(1), queries.call(100)
+  end
+
+  # --- custom field labels -------------------------------------------------
+
+  # A project field per id-based format. CustomValue rows are written directly:
+  # core's validation would refuse a user who is not a project member, which
+  # is the case the visibility rule is about.
+  def labelled_project_fields
+    health = ProjectCustomField.create!(name: 'Health', field_format: 'enumeration', visible: true)
+    green  = health.enumerations.create!(name: 'Green', position: 1)
+    red    = health.enumerations.create!(name: 'Red', position: 2)
+    team   = ProjectCustomField.create!(name: 'Team', field_format: 'user', multiple: true, visible: true)
+    target = ProjectCustomField.create!(name: 'Target', field_format: 'version', visible: true)
+    { health: health, green: green, red: red, team: team, target: target }
+  end
+
+  def store_value(project, field, value)
+    CustomValue.create!(custom_field: field, customized: project, value: value.to_s)
+  end
+
+  def project_custom_field(row, field)
+    row['custom_fields'].detect { |f| f['id'] == field.id }
+  end
+
+  def test_get_project_names_enumeration_user_and_version_values
+    f = labelled_project_fields
+    project = Project.find(1)
+    store_value(project, f[:health], f[:green].id)
+    store_value(project, f[:team], 2)
+    store_value(project, f[:team], 3)
+    store_value(project, f[:target], 2)
+
+    row = call_tool('get_project', { 'project' => 'ecookbook' })['structuredContent']
+    assert_equal({ 'id' => f[:health].id, 'name' => 'Health', 'format' => 'enumeration',
+                   'value' => f[:green].id.to_s, 'label' => 'Green' }, project_custom_field(row, f[:health]))
+    team = project_custom_field(row, f[:team])
+    assert_equal %w[2 3], team['value'].sort
+    assert_equal team['value'].map { |id| User.find(id).name }, team['label']
+    assert_equal ['2', '1.0'], project_custom_field(row, f[:target]).values_at('value', 'label')
+    # A list field stores the label itself, so it gets none.
+    assert_not project_custom_field(row, CustomField.find(3)).key?('label')
+    assert_equal 'list', project_custom_field(row, CustomField.find(3))['format']
+  end
+
+  def test_get_project_leaves_unnamed_a_deleted_or_invisible_target
+    f = labelled_project_fields
+    project = Project.find(1)
+    store_value(project, f[:health], f[:red].id)
+    store_value(project, f[:team], 2)
+    store_value(project, f[:team], 5) # locked, so outside Principal.visible for user 2
+    store_value(project, f[:target], 999)
+    CustomFieldEnumeration.where(id: f[:red].id).delete_all
+
+    row = call_tool('get_project', { 'project' => 'ecookbook' })['structuredContent']
+    assert_equal [f[:red].id.to_s, nil], project_custom_field(row, f[:health]).values_at('value', 'label')
+    team = project_custom_field(row, f[:team])
+    assert_equal({ '2' => User.find(2).name, '5' => nil }, team['value'].zip(team['label']).to_h)
+    assert_equal ['999', nil], project_custom_field(row, f[:target]).values_at('value', 'label')
+  end
+
+  # Core still shows a value it no longer offers; so does the label.
+  def test_get_project_names_an_inactive_enumeration
+    f = labelled_project_fields
+    store_value(Project.find(1), f[:health], f[:green].id)
+    f[:green].update!(active: false)
+    row = call_tool('get_project', { 'project' => 'ecookbook' })['structuredContent']
+    assert_equal 'Green', project_custom_field(row, f[:health])['label']
+  end
+
+  def test_list_projects_labels_do_not_query_per_project
+    CustomField.find(3).update!(visible: false, role_ids: [Role.non_member.id])
+    f = labelled_project_fields
+    Project.all.each do |project|
+      store_value(project, f[:health], f[:green].id)
+      store_value(project, f[:team], 2)
+      store_value(project, f[:team], 3)
+      store_value(project, f[:target], 2)
+    end
+    queries = lambda do |limit|
+      count = 0
+      counter = ->(*, payload) { count += 1 unless %w[SCHEMA CACHE].include?(payload[:name]) || payload[:cached] }
+      rows = nil
+      ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+        rows = call_tool('list_projects', { 'include_custom_fields' => true, 'limit' => limit })['structuredContent']['projects']
+      end
+      assert(rows.all? { |row| project_custom_field(row, f[:health])['label'] == 'Green' })
+      count
+    end
+    queries.call(1) # warm the settings and role caches
+    assert_operator Project.visible(User.find(2)).count, :>, 2
+    assert_equal queries.call(1), queries.call(100)
+  end
+
+  # The write tools read back the saved fields through the same row.
+  def test_update_issue_names_a_saved_user_custom_field
+    enable_mcp('read_only' => '0')
+    field  = IssueCustomField.create!(name: 'Reviewer', field_format: 'user', is_for_all: true, tracker_ids: [1])
+    result = call_tool('update_issue', { 'issue' => 1, 'custom_field_values' => { field.id.to_s => '2' } })
+    assert_not result['isError'], result.inspect
+    saved = result['structuredContent']['custom_fields'].detect { |f| f['id'] == field.id }
+    assert_equal ['2', User.find(2).name], saved.values_at('value', 'label')
   end
 end
