@@ -15,6 +15,10 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 - `list_projects` takes `include_custom_fields` (default `false`) to add the same `custom_fields` to
   every row, so one field can be read across all projects in a few paged calls. The query count
   does not grow with the page size. Without the flag the rows are unchanged.
+- A plugin setting lists the custom fields to hide from every MCP client, checked by type on the
+  settings page. An excluded field is left out of every reply and of the issue history, refused as a
+  value to set, and unknown as a filter, sort or grouping, including in a saved query's own sort and
+  grouping. A free-text `search` still matches a searchable field.
 
 ## [0.2.1] - 2026-10-27
 

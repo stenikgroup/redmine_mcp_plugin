@@ -192,7 +192,7 @@ module RedmineMcpPlugin
 
       # Core's own rule, which honours the roles a field is restricted to.
       def custom_fields_for(entry)
-        entry.visible_custom_field_values(user).map { |value| custom_field_row(value) }
+        shown_custom_fields(entry.visible_custom_field_values(user))
       end
     end
   end

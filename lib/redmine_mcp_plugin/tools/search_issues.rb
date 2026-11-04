@@ -121,6 +121,7 @@ module RedmineMcpPlugin
 
         # Before anything memoises available_filters, which vary by project.
         query.project = project if project
+        drop_excluded_order!(query)
         query
       end
 

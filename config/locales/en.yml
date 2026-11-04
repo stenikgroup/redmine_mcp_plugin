@@ -4,6 +4,7 @@ en:
       section_endpoint: Endpoint
       section_authentication: Authentication modes
       section_behaviour: Behaviour
+      section_custom_fields: Custom fields
       enabled: Enable the MCP endpoint
       enabled_hint: "Serves POST %{url}. Off by default."
       auth_oauth2: OAuth2 (recommended)
@@ -20,5 +21,6 @@ en:
       allowed_origins_hint: "One per line, e.g. https://app.example.com. This Redmine's own origin is always allowed. Requests with no Origin header - which is every non-browser MCP client - are unaffected."
       max_results: Maximum results per call
       max_results_hint: "Upper bound on rows any single tool may return. Capped at %{max}."
+      excluded_custom_fields_hint: "Checked fields are hidden from every MCP client, whatever the user may see in Redmine: left out of every reply and the issue history, and refused as a value to set, a filter, a sort or a grouping. To hide a field from some roles in Redmine itself as well, use the field's own visibility setting instead. A free-text search still matches a searchable field: clear its Searchable flag too."
       rest_api_warning: "The REST API is disabled in Administration > Settings > API, which disables OAuth2, API key and HTTP Basic authentication for this endpoint too."
       no_auth_warning: "No authentication mode is enabled, so the endpoint will refuse every request."

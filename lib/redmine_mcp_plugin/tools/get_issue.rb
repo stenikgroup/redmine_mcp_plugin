@@ -74,7 +74,7 @@ module RedmineMcpPlugin
       # Issue#visible_custom_field_values applies per-field role visibility.
       # Reading custom_field_values directly would leak fields core hides.
       def visible_custom_fields(issue)
-        issue.visible_custom_field_values.map { |value| custom_field_row(value) }
+        shown_custom_fields(issue.visible_custom_field_values)
       end
 
       # Direct subtasks in the tree's order, only those the user may see, as on the issue page.
@@ -94,6 +94,7 @@ module RedmineMcpPlugin
         checklists = !plugin?(:redmine_checklists) || user.allowed_to?(:view_checklists, issue.project)
         issue.journals.visible(user).includes(:user).order(:created_on).filter_map do |journal|
           details = journal.visible_details(user)
+          details = details.reject { |detail| detail.property == 'cf' && excluded_custom_field?(detail.prop_key) }
           details = details.reject { |detail| checklist_detail?(detail) } unless checklists
           rows    = details.filter_map { |detail| detail_row(detail, history) }
           # As the issue page: an entry with no notes and nothing the user may see is left out.

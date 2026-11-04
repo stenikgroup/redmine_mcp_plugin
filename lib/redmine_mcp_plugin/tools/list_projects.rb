@@ -61,7 +61,7 @@ module RedmineMcpPlugin
       # caller's membership once per project. The same rule runs here on data
       # loaded once for the whole page.
       def with_custom_fields(projects)
-        fields = ProjectCustomField.sorted.preload(:roles).to_a
+        fields = ProjectCustomField.sorted.preload(:roles).reject { |field| excluded_custom_field?(field.id) }
         roles  = fields.all? { |field| field.visible? || user.admin? } ? {} : roles_by_project(projects)
         projects.map do |project|
           visible = fields.select { |field| visible_field?(field, roles[project.id]) }
