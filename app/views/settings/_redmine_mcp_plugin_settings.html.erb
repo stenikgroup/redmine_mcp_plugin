@@ -64,3 +64,26 @@
                            max: RedmineMcpPlugin::Settings::ABSOLUTE_MAX_RESULTS) %></em>
   </p>
 </fieldset>
+
+<fieldset class="box">
+  <legend><%= l('redmine_mcp_plugin.settings.section_custom_fields') %></legend>
+  <p><em class="info"><%= l('redmine_mcp_plugin.settings.excluded_custom_fields_hint') %></em></p>
+  <%= hidden_field_tag 'settings[excluded_custom_fields][]', '' %>
+  <% excluded = RedmineMcpPlugin::Settings.excluded_custom_field_ids %>
+  <% fields = CustomField.sorted.to_a.group_by { |field| field.type_name ? l(field.type_name) : field.class.name } %>
+  <% if fields.empty? %>
+    <p class="nodata"><%= l(:label_no_data) %></p>
+  <% end %>
+  <% fields.sort_by(&:first).each do |label, group| %>
+    <p>
+      <label><%= label %></label>
+      <% group.each do |field| %>
+        <label class="block">
+          <%= check_box_tag 'settings[excluded_custom_fields][]', field.id, excluded.include?(field.id),
+                            id: "settings_excluded_custom_fields_#{field.id}" %>
+          <%= field.name %> <span class="info">(id <%= field.id %>)</span>
+        </label>
+      <% end %>
+    </p>
+  <% end %>
+</fieldset>

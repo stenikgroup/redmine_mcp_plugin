@@ -7,7 +7,8 @@ class McpControllerTest < Redmine::ControllerTest
   fixtures :projects, :users, :email_addresses, :roles, :members, :member_roles,
            :issues, :issue_statuses, :trackers, :enumerations, :enabled_modules, :watchers,
            :projects_trackers, :workflows, :custom_fields, :custom_fields_trackers,
-           :custom_fields_projects, :custom_values, :time_entries, :versions
+           :custom_fields_projects, :custom_values, :time_entries, :versions, :journals, :journal_details,
+           :queries
 
   def setup
     Setting.rest_api_enabled = '1'
@@ -512,5 +513,89 @@ class McpControllerTest < Redmine::ControllerTest
     assert_not result['isError'], result.inspect
     saved = result['structuredContent']['custom_fields'].detect { |f| f['id'] == field.id }
     assert_equal ['2', User.find(2).name], saved.values_at('value', 'label')
+  end
+
+  # --- excluded custom fields ----------------------------------------------
+
+  def exclude_custom_fields(*ids)
+    enable_mcp('excluded_custom_fields' => ['', *ids.map(&:to_s)])
+  end
+
+  def custom_field_ids_in(rows)
+    Array(rows).map { |row| row['id'] }
+  end
+
+  # Issue 1 holds a value for field 2; journal 3, on issue 2, records a change to it.
+  def test_get_issue_leaves_out_an_excluded_field_and_its_history
+    history = lambda do
+      fields  = call_tool('get_issue', { 'issue' => 1 })['structuredContent']['custom_fields']
+      journal = call_tool('get_issue', { 'issue' => 2 })['structuredContent']['journals']
+      [custom_field_ids_in(fields), journal.flat_map { |entry| entry['details'] }.select { |d| d['property'] == 'cf' }]
+    end
+    fields, details = history.call
+    assert_includes fields, 2
+    assert details.any?, 'journal 3 should record a change to field 2'
+
+    exclude_custom_fields(2)
+    fields, details = history.call
+    assert_not_includes fields, 2
+    assert_empty details
+  end
+
+  def test_project_tools_leave_out_an_excluded_field
+    exclude_custom_fields(3)
+    assert_empty call_tool('get_project', { 'project' => 'ecookbook' })['structuredContent']['custom_fields']
+    rows = call_tool('list_projects', { 'include_custom_fields' => true })['structuredContent']['projects']
+    assert(rows.all? { |row| row['custom_fields'].empty? })
+  end
+
+  def test_time_entry_tools_leave_out_an_excluded_field
+    entries = -> { call_tool('list_time_entries', { 'project' => 'ecookbook' })['structuredContent']['entries'] }
+    assert(entries.call.any? { |row| custom_field_ids_in(row['custom_fields']).include?(10) })
+    exclude_custom_fields(10)
+    rows = entries.call
+    assert rows.any?
+    assert(rows.none? { |row| custom_field_ids_in(row['custom_fields']).include?(10) })
+    fields = call_tool('list_enumerations', { 'project' => 'ecookbook' })['structuredContent']['time_entry_custom_fields']
+    assert_not_includes custom_field_ids_in(fields), 10
+  end
+
+  # Neither offered nor accepted: setting it is refused as a field that cannot be set here.
+  def test_an_excluded_field_cannot_be_set
+    enable_mcp('read_only' => '0', 'excluded_custom_fields' => ['2'])
+    fields = call_tool('get_issue_fields', { 'issue' => 1 })['structuredContent']['custom_fields']
+    assert_not_includes custom_field_ids_in(fields), 2
+    result = call_tool('update_issue', { 'issue' => 1, 'custom_field_values' => { '2' => 'leak' } })
+    assert result['isError'], result.inspect
+    assert_match(/cannot be set here/, result['content'].first['text'])
+    assert_equal '125', Issue.find(1).custom_field_value(CustomField.find(2))
+  end
+
+  # A filter, sort or grouping on the field would read its values back.
+  def test_an_excluded_field_is_unknown_to_issue_queries
+    assert_not call_tool('search_issues', { 'filters' => { 'cf_1' => 'MySQL' } })['isError']
+    exclude_custom_fields(1)
+    [{ 'filters' => { 'cf_1' => 'MySQL' } }, { 'sort' => 'cf_1:asc' }, { 'group_by' => 'cf_1' },
+     { 'describe' => 'cf_1' }].each do |arguments|
+      assert call_tool('search_issues', arguments)['isError'], arguments.inspect
+    end
+    described = call_tool('search_issues', { 'describe' => true })['structuredContent']
+    assert(described['filters'].none? { |filter| filter['field'] =~ /cf_1\z/ })
+    assert(described['groupable'].none? { |field| field.end_with?('cf_1') })
+  end
+
+  def test_an_excluded_field_is_unknown_to_time_entry_queries
+    exclude_custom_fields(10)
+    result = call_tool('list_time_entries', { 'project' => 'ecookbook', 'filters' => { 'cf_10' => '1' } })
+    assert result['isError'], result.inspect
+  end
+
+  # Query 9 groups by cf_1: its group labels would be the field's values.
+  def test_a_saved_query_does_not_group_on_an_excluded_field
+    assert call_tool('search_issues', { 'query' => 9 })['structuredContent'].key?('groups')
+    exclude_custom_fields(1)
+    result = call_tool('search_issues', { 'query' => 9 })
+    assert_not result['isError'], result.inspect
+    assert_not result['structuredContent'].key?('groups')
   end
 end

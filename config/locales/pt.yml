@@ -4,6 +4,7 @@ pt:
       section_endpoint: Endpoint
       section_authentication: Modos de autenticacao
       section_behaviour: Comportamento
+      section_custom_fields: Campos personalizados
       enabled: Activar o endpoint MCP
       enabled_hint: "Responde a POST %{url}. Desactivado por omissao."
       auth_oauth2: OAuth2 (recomendado)
@@ -20,5 +21,6 @@ pt:
       allowed_origins_hint: "Uma por linha, por exemplo https://app.example.com. A origem deste Redmine e sempre permitida. Pedidos sem cabecalho Origin - ou seja, todos os clientes MCP fora do browser - nao sao afectados."
       max_results: Maximo de resultados por chamada
       max_results_hint: "Limite superior de linhas devolvidas por uma ferramenta. Limitado a %{max}."
+      excluded_custom_fields_hint: "Os campos marcados ficam ocultos para todos os clientes MCP, seja o que for que o utilizador possa ver no Redmine: omitidos de todas as respostas e do historico do pedido, e recusados como valor a definir, filtro, ordenacao ou agrupamento. Para os ocultar tambem a alguns papeis no proprio Redmine, use a visibilidade do campo. Uma pesquisa de texto livre ainda encontra um campo pesquisavel: desmarque tambem a opcao Pesquisavel."
       rest_api_warning: "A API REST esta desactivada em Administracao > Configuracao > API, o que desactiva tambem a autenticacao OAuth2, por chave de API e HTTP Basic neste endpoint."
       no_auth_warning: "Nenhum modo de autenticacao esta activo, pelo que o endpoint vai recusar todos os pedidos."

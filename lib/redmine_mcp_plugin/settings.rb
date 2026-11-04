@@ -39,7 +39,10 @@ module RedmineMcpPlugin
       # header at all (i.e. every non-browser MCP client) are unaffected.
       'allowed_origins' => '',
       # Cap on rows any single tool call may return.
-      'max_results' => '100'
+      'max_results' => '100',
+      # Custom field ids no tool reads, writes, filters, sorts or groups on, for
+      # any user. The form posts a list; a comma separated string is read too.
+      'excluded_custom_fields' => []
     }.freeze
 
     ABSOLUTE_MAX_RESULTS = 1000
@@ -79,6 +82,11 @@ module RedmineMcpPlugin
         return 100 if n <= 0
 
         [n, ABSOLUTE_MAX_RESULTS].min
+      end
+
+      def excluded_custom_field_ids
+        Array(all['excluded_custom_fields']).flat_map { |value| value.to_s.split(/[,\s]+/) }
+                                            .filter_map { |value| Integer(value, exception: false) }.uniq
       end
 
       def allowed_origins

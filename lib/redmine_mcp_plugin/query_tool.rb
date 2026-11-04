@@ -24,7 +24,7 @@ module RedmineMcpPlugin
     # Core drops an unknown field silently, and a dropped filter widens the
     # result, which reads to the caller exactly like an answer.
     def set_filter!(query, field, operator, values = '')
-      available = query.available_filters[field]
+      available = available_filters(query)[field]
       unknown_filter!(query, field) unless available
 
       legal = operators_for(available[:type])
@@ -38,6 +38,18 @@ module RedmineMcpPlugin
       # Core validates only numeric and date filters; a name here matches nothing and reads as zero.
       values.each { |value| user_ref!(value, field) if value.present? } if user_valued?(field, available)
       query.add_filter(field, operator, values)
+    end
+
+    # Core's filters minus those on an excluded custom field, which then reads
+    # as unknown everywhere: set, described, or suggested as a close match.
+    def available_filters(query)
+      query.available_filters.reject { |field, _filter| excluded_custom_field_key?(field) }
+    end
+
+    # A saved query may sort or group on an excluded field; its group labels are the field's values.
+    def drop_excluded_order!(query)
+      query.group_by = nil if excluded_custom_field_key?(query.group_by)
+      query.sort_criteria = query.sort_criteria.to_a.reject { |field, _direction| excluded_custom_field_key?(field) }
     end
 
     def explicit_filters(arguments)
@@ -85,7 +97,7 @@ module RedmineMcpPlugin
     def target_kinds(query, field)
       return self.class::AUTHORISED_FILTERS[field] if self.class::AUTHORISED_FILTERS.key?(field)
 
-      filter = query.available_filters[field]
+      filter = available_filters(query)[field]
       filter && filter[:field]&.field_format == 'version' ? VERSION_FIELD : {}
     end
 
@@ -137,11 +149,11 @@ module RedmineMcpPlugin
     end
 
     def sortable_fields(query)
-      query.sortable_columns.select { |_name, sortable| sortable.present? }.keys.sort
+      query.sortable_columns.select { |name, sortable| sortable.present? && !excluded_custom_field_key?(name) }.keys.sort
     end
 
     def groupable_fields(query)
-      query.groupable_columns.map { |column| column.name.to_s }.sort
+      query.groupable_columns.map { |column| column.name.to_s }.reject { |name| excluded_custom_field_key?(name) }.sort
     end
 
     # --- grouped results ----------------------------------------------------
@@ -172,7 +184,7 @@ module RedmineMcpPlugin
       return describe_one(query, which) if which.is_a?(String) && which != 'true'
 
       {
-        filters: query.available_filters.map { |field, filter| describe_filter(field, filter) },
+        filters: available_filters(query).map { |field, filter| describe_filter(field, filter) },
         sortable: sortable_fields(query),
         groupable: groupable_fields(query)
       }
@@ -180,7 +192,7 @@ module RedmineMcpPlugin
 
     # One filter by name, the same refusal as a filter that is set.
     def describe_one(query, field)
-      filter = query.available_filters[field]
+      filter = available_filters(query)[field]
       unknown_filter!(query, field) if filter.nil?
 
       describe_filter(field, filter)
@@ -201,11 +213,11 @@ module RedmineMcpPlugin
 
     def close_filters(query, field)
       wanted = filter_words(field)
-      close  = query.available_filters.select do |name, filter|
+      close  = available_filters(query).select do |name, filter|
         words = filter_words(name) | filter_words(filter[:name])
         words.any? { |word| wanted.any? { |w| word.start_with?(w) || w.start_with?(word) } }
       end.keys
-      close = DidYouMean::SpellChecker.new(dictionary: query.available_filters.keys).correct(field.to_s) if close.empty?
+      close = DidYouMean::SpellChecker.new(dictionary: available_filters(query).keys).correct(field.to_s) if close.empty?
       close.first(MAX_SUGGESTIONS)
     end
 

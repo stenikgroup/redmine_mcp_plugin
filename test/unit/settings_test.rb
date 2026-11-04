@@ -49,6 +49,13 @@ class RedmineMcpPluginSettingsTest < ActiveSupport::TestCase
     with_settings_hash('max_results' => 'abc')   { assert_equal 100, S.max_results }
   end
 
+  # The form posts a list led by a blank, so an empty selection still saves.
+  def test_excluded_custom_field_ids_reads_a_list_or_a_string
+    with_settings_hash('excluded_custom_fields' => ['', '84', '3']) { assert_equal [84, 3], S.excluded_custom_field_ids }
+    with_settings_hash('excluded_custom_fields' => '84, 3 x') { assert_equal [84, 3], S.excluded_custom_field_ids }
+    with_settings_hash({}) { assert_equal [], S.excluded_custom_field_ids }
+  end
+
   def test_allowed_origins_splits_on_whitespace_and_commas
     with_settings_hash('allowed_origins' => "https://a.example\nhttps://b.example, https://c.example") do
       assert_equal %w[https://a.example https://b.example https://c.example], S.allowed_origins

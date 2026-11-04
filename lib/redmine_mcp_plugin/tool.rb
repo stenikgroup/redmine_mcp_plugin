@@ -583,11 +583,38 @@ module RedmineMcpPlugin
     # Choices named in a refusal, capped so a user field on a big instance stays readable.
     MAX_CHOICES = 25
 
+    # A filter, sort or group key on a custom field, own or reached through an
+    # association: cf_12, issue.cf_12, project.cf_12, author.cf_12.
+    CUSTOM_FIELD_KEY = /(?:\A|\.)cf_(\d+)\z/
+
+    # The fields an administrator keeps away from every MCP client, read once per call.
+    def excluded_custom_field_ids
+      @excluded_custom_field_ids ||= Settings.excluded_custom_field_ids.to_set
+    end
+
+    def excluded_custom_field?(id)
+      excluded_custom_field_ids.include?(id.to_i)
+    end
+
+    def excluded_custom_field_key?(key)
+      (match = CUSTOM_FIELD_KEY.match(key.to_s)) && excluded_custom_field?(match[1])
+    end
+
+    # Core's visible or editable values, minus the excluded fields. Every
+    # custom field a tool reads or offers goes through here.
+    def shown_custom_field_values(values)
+      values.reject { |value| excluded_custom_field?(value.custom_field_id) }
+    end
+
+    def shown_custom_fields(values)
+      custom_field_value_rows(shown_custom_field_values(values))
+    end
+
     # The custom fields this user may set on `record`, each with its allowed
     # values, in one shape for issues and time entries. `required_ids` adds the
     # fields a workflow rule requires here beyond the definition flag.
     def custom_field_rows(record, required_ids = [])
-      record.editable_custom_field_values(user).map do |value|
+      shown_custom_field_values(record.editable_custom_field_values(user)).map do |value|
         field = value.custom_field
         {
           id: field.id,
@@ -618,7 +645,7 @@ module RedmineMcpPlugin
 
     # Same reason as the attributes: core keeps only the custom fields this user may edit here.
     def unknown_custom_fields(record, ids)
-      editable = record.editable_custom_field_values(user).map { |value| value.custom_field_id.to_s }
+      editable = shown_custom_field_values(record.editable_custom_field_values(user)).map { |value| value.custom_field_id.to_s }
       unknown  = Array(ids).map(&:to_s) - editable
       return nil if unknown.empty?
 
@@ -676,7 +703,7 @@ module RedmineMcpPlugin
     # leaves it alone too.
     def require_custom_fields!(record, required_ids = [])
       changed = record.new_record? || record.custom_field_values_changed?
-      missing = record.editable_custom_field_values(user).select do |current|
+      missing = shown_custom_field_values(record.editable_custom_field_values(user)).select do |current|
         field = current.custom_field
         next false unless Array(current.value).all?(&:blank?)
 
@@ -915,7 +942,7 @@ module RedmineMcpPlugin
       values = Array(ids).filter_map do |id|
         record.custom_field_values.detect { |v| v.custom_field_id.to_s == id.to_s }
       end
-      custom_field_value_rows(values)
+      shown_custom_fields(values)
     end
 
     # The formats that store a record id as their value. A list field stores

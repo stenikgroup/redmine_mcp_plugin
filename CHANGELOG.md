@@ -21,6 +21,10 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   multiple field. `value` is unchanged and is still what the write tools take. A user outside
   `Principal.visible`, a version whose issues the caller may not see, or a target deleted since has
   a `null` label. The labels cost one query per format, whatever the page size (#9).
+- A plugin setting lists the custom fields to hide from every MCP client, checked by type on the
+  settings page. An excluded field is left out of every reply and of the issue history, refused as a
+  value to set, and unknown as a filter, sort or grouping, including in a saved query's own sort and
+  grouping. A free-text `search` still matches a searchable field.
 
 ## [0.2.1] - 2026-10-27
 

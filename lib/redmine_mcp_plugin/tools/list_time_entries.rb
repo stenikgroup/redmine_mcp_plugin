@@ -111,7 +111,7 @@ module RedmineMcpPlugin
         scope   = query.results_scope.preload(:activity, :user, :project, :custom_values, issue: :project)
         entries = scope.offset(offset).limit(limit).to_a
         # Core's own rule, which honours the roles a field is restricted to.
-        values  = entries.to_h { |entry| [entry, entry.visible_custom_field_values(user)] }
+        values  = entries.to_h { |entry| [entry, shown_custom_field_values(entry.visible_custom_field_values(user))] }
         labels  = custom_value_labels(values.values.flatten)
         rows    = entries.map { |entry| summarise(entry, values[entry], labels) }
 

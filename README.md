@@ -79,6 +79,24 @@ carries ambient browser credentials.
 API key mode ships **on** by default (`lib/redmine_mcp_plugin/settings.rb`), so switching it off is
 an explicit step, not something the defaults do for you.
 
+#### Excluded custom fields
+
+The same page lists every custom field, grouped by type. A checked field is hidden from every MCP
+client, whatever the user may see of it in Redmine:
+
+- left out of every reply that carries custom fields (`get_issue`, `get_project`, `list_projects`,
+  `list_time_entries`, `get_issue_fields`, `list_enumerations`, the state a write echoes back) and
+  of the issue history;
+- refused as a value to set, like a field the user may not edit. A required excluded field therefore
+  blocks a create through MCP, with core's own "cannot be blank";
+- unknown to `search_issues` and `list_time_entries` as a filter, sort or grouping, including
+  `issue.cf_N` and `project.cf_N`. A saved query that sorts or groups on it runs unsorted or
+  ungrouped on that field; a filter it stores still applies.
+
+`search` still matches the field's text when the field is searchable: clear its Searchable flag too.
+To hide a field from some roles everywhere, Redmine's own field visibility is the right tool, and the
+plugin honours it already. The setting is for what an agent should not read even when its user may.
+
 ### OAuth application scopes
 
 Administration → Applications → the MCP application. Enable at least the scopes the server
@@ -526,7 +544,8 @@ Redmine, as in any plugin, because Redmine eager-loads every plugin's `lib/`.
 An extension's tools share everything else with this plugin's:
 
 - **Settings.** The enabled switch, the authentication modes, the REST API gate, read-only mode, the
-  allowed origins and `max_results`.
+  allowed origins, `max_results` and the excluded custom fields. A tool honours the last through the
+  `shown_custom_fields` and `shown_custom_field_values` helpers and the `QueryTool` filters.
 - **Request handling.** Authentication, the Origin and protocol-version checks, the JSON-RPC handling and
   the status codes.
 - **Tool behaviour.** The `Tool` base: the permission check through `User#allowed_to?`, the read-only
