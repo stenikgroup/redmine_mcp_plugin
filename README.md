@@ -317,6 +317,11 @@ Its history reads as the issue page's: a custom field by its name, a reference w
 `assigned_to`, `parent`, `child`), a checklist change as the items added, removed, done, undone and
 renamed, shown only under `view_checklists` as the plugin's own history does, and no journal with
 neither notes nor a detail the caller may see.
+
+Every custom field row gives its `format` and its stored `value`, which is what the write tools take;
+an `enumeration`, `user` or `version` field also names that id in `label`, `null` for a user outside
+`Principal.visible`, a version whose issues the caller may not see, or a target deleted since.
+
 `list_users` uses `Principal.visible` rather than `User.all`, which honours each role's
 `users_visibility` setting.
 

@@ -6,7 +6,7 @@ module RedmineMcpPlugin
       tool 'get_issue',
            title: 'Get issue',
            description: 'Fetch one issue with its description, attachments, watchers and plugin data ' \
-                        'where permitted, and optionally its notes and history.',
+                        "where permitted, and optionally its notes and history. #{CUSTOM_FIELD_LABELS}",
            permission: :view_issues,
            scopes: %i[view_issue_watchers],
            plugin_scopes: { redmine_checklists: %i[view_checklists] },
@@ -74,7 +74,7 @@ module RedmineMcpPlugin
       # Issue#visible_custom_field_values applies per-field role visibility.
       # Reading custom_field_values directly would leak fields core hides.
       def visible_custom_fields(issue)
-        issue.visible_custom_field_values.map { |value| custom_field_row(value) }
+        custom_field_value_rows(issue.visible_custom_field_values)
       end
 
       # Direct subtasks in the tree's order, only those the user may see, as on the issue page.

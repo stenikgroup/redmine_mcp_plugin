@@ -6,7 +6,7 @@ module RedmineMcpPlugin
       tool 'list_projects',
            title: 'List projects',
            description: 'List the Redmine projects visible to the authenticated user. Pass include_custom_fields ' \
-                        'to read the project custom fields of every row, as get_project gives them for one.',
+                        "to read the project custom fields of every row, as get_project gives them for one. #{CUSTOM_FIELD_LABELS}",
            permission: :view_project,
            schema: {
              'type' => 'object',
@@ -59,13 +59,17 @@ module RedmineMcpPlugin
 
       # Project#visible_custom_field_values per row loads the field list and the
       # caller's membership once per project. The same rule runs here on data
-      # loaded once for the whole page.
+      # loaded once for the whole page, and the labels are looked up once for it too.
       def with_custom_fields(projects)
         fields = ProjectCustomField.sorted.preload(:roles).to_a
         roles  = fields.all? { |field| field.visible? || user.admin? } ? {} : roles_by_project(projects)
-        projects.map do |project|
+        values = projects.to_h do |project|
           visible = fields.select { |field| visible_field?(field, roles[project.id]) }
-          summarise(project).merge(custom_fields: visible.map { |field| stored_row(project, field) })
+          [project, visible.map { |field| stored_value(project, field) }]
+        end
+        labels = custom_value_labels(values.values.flatten)
+        values.map do |project, stored|
+          summarise(project).merge(custom_fields: stored.map { |value| custom_field_row(value, labels) })
         end
       end
 
@@ -75,10 +79,9 @@ module RedmineMcpPlugin
       end
 
       # Custom values are preloaded. A field with no stored value reads blank, as core's does.
-      def stored_row(project, field)
+      def stored_value(project, field)
         values = project.custom_values.select { |v| v.custom_field_id == field.id }.map(&:value)
-        custom_field_row(CustomFieldValue.new(custom_field: field, customized: project,
-                                              value: field.multiple? ? values : values.first))
+        CustomFieldValue.new(custom_field: field, customized: project, value: field.multiple? ? values : values.first)
       end
 
       # User#roles_for_project for a page of projects, in two queries instead of
