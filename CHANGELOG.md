@@ -5,6 +5,17 @@ All notable changes to this fork. The format follows
 [Semantic Versioning](https://semver.org/). The version is `RedmineMcpPlugin::VERSION`: Redmine's
 plugin list shows it, and MCP clients read it as `serverInfo.version`.
 
+## [Unreleased]
+
+### Added
+
+- `get_project` returns the project's `custom_fields`, in the `{ id, name, value }` shape of
+  `get_issue` and of core's `/projects/:id.json`. A field restricted to roles the caller does not
+  hold on that project is left out, as on the project page.
+- `list_projects` takes `include_custom_fields` (default `false`) to add the same `custom_fields` to
+  every row, so one field can be read across all projects in a few paged calls. The query count
+  does not grow with the page size. Without the flag the rows are unchanged.
+
 ## [0.2.1] - 2026-10-27
 
 ### Fixed
