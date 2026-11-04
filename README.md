@@ -291,7 +291,7 @@ while read-only mode is on, which is the default.
 | Tool | Permission |
 |---|---|
 | `whoami` | none. Reports identity, auth mode and granted scopes |
-| `list_projects`, `get_project` | `view_project` |
+| `list_projects`, `get_project` | `view_project`. Project custom fields follow core's per-role visibility: always on `get_project`, on `list_projects` with `include_custom_fields` |
 | `search_issues`, `get_issue` | `view_issues`. `get_issue` adds the attachments, the subtasks the caller can see, the relations whose other issue the caller can see, the watchers under `view_issue_watchers`, the checklist under `view_checklists`, and the tags |
 | `get_attachment` | `view_issues`, through core's `Attachment#visible?`. Metadata, and the content of a text file within `file_max_size_displayed` |
 | `list_queries` | `view_issues`. Saved queries, filtered by `IssueQuery.visible` |

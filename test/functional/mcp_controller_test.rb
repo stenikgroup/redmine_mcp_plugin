@@ -360,4 +360,56 @@ class McpControllerTest < Redmine::ControllerTest
     result = call_tool('update_issue', { 'issue' => issue.id, 'custom_field_values' => { '1' => 'MySQL' } })
     assert_not result['isError'], result.inspect
   end
+
+  # --- project custom fields -----------------------------------------------
+
+  def project_custom_fields(row)
+    row['custom_fields'].to_h { |field| [field['id'], field['value']] }
+  end
+
+  def test_get_project_returns_its_custom_fields
+    result = call_tool('get_project', { 'project' => 'ecookbook' })
+    assert_not result['isError'], result.inspect
+    assert_equal({ 3 => 'Stable' }, project_custom_fields(result['structuredContent']))
+  end
+
+  # A field restricted to roles the caller does not hold there is hidden, as on the project page.
+  def test_get_project_leaves_out_a_field_restricted_to_another_role
+    CustomField.find(3).update!(visible: false, role_ids: [Role.find(3).id])
+    result = call_tool('get_project', { 'project' => 'ecookbook' })
+    assert_not result['isError'], result.inspect
+    assert_empty result['structuredContent']['custom_fields']
+  end
+
+  def test_list_projects_leaves_custom_fields_out_by_default
+    result = call_tool('list_projects', {})
+    assert(result['structuredContent']['projects'].none? { |row| row.key?('custom_fields') })
+  end
+
+  # Restricted to Non member: user 2 sees it on the public projects they are not a member of only.
+  def test_list_projects_applies_field_roles_per_project
+    CustomField.find(3).update!(visible: false, role_ids: [Role.non_member.id])
+    rows = call_tool('list_projects', { 'include_custom_fields' => true })['structuredContent']['projects']
+    shown = rows.select { |row| project_custom_fields(row).key?(3) }.map { |row| row['id'] }
+    expected = rows.map { |row| Project.find(row['id']) }
+                   .select { |project| CustomField.find(3).visible_by?(project, User.find(2)) }.map(&:id)
+    assert_equal expected.sort, shown.sort
+    assert_includes shown, 3
+    assert_not_includes shown, 1
+  end
+
+  def test_list_projects_with_custom_fields_does_not_query_per_project
+    CustomField.find(3).update!(visible: false, role_ids: [Role.non_member.id])
+    queries = lambda do |limit|
+      count = 0
+      counter = ->(*, payload) { count += 1 unless %w[SCHEMA CACHE].include?(payload[:name]) || payload[:cached] }
+      ActiveSupport::Notifications.subscribed(counter, 'sql.active_record') do
+        call_tool('list_projects', { 'include_custom_fields' => true, 'limit' => limit })
+      end
+      count
+    end
+    queries.call(1) # warm the settings and role caches
+    assert_operator Project.visible(User.find(2)).count, :>, 2
+    assert_equal queries.call(1), queries.call(100)
+  end
 end

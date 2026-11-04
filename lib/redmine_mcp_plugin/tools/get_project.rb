@@ -5,7 +5,8 @@ module RedmineMcpPlugin
     class GetProject < Tool
       tool 'get_project',
            title: 'Get project',
-           description: 'Fetch one project by identifier or numeric id, with its enabled modules and trackers.',
+           description: 'Fetch one project by identifier or numeric id, with its enabled modules, trackers, ' \
+                        'issue categories, versions and the project custom fields visible to the caller.',
            permission: :view_project,
            schema: {
              'type' => 'object',
@@ -37,7 +38,9 @@ module RedmineMcpPlugin
           # Categories and versions are cheap and are what a model needs before
           # it can create or filter an issue sensibly.
           issue_categories: project.issue_categories.map { |c| { id: c.id, name: c.name } },
-          versions: project.shared_versions.map { |v| { id: v.id, name: v.name, status: v.status } }
+          versions: project.shared_versions.map { |v| { id: v.id, name: v.name, status: v.status } },
+          # Core's own rule, which honours the roles a field is restricted to.
+          custom_fields: project.visible_custom_field_values(user).map { |value| custom_field_row(value) }
         }
       end
     end
