@@ -6,7 +6,7 @@ module RedmineMcpPlugin
       tool 'get_project',
            title: 'Get project',
            description: 'Fetch one project by identifier or numeric id, with its enabled modules, trackers, ' \
-                        'issue categories, versions and the project custom fields visible to the caller.',
+                        "issue categories, versions and the project custom fields visible to the caller. #{CUSTOM_FIELD_LABELS}",
            permission: :view_project,
            schema: {
              'type' => 'object',

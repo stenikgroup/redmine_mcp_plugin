@@ -6,7 +6,7 @@ module RedmineMcpPlugin
       tool 'get_issue',
            title: 'Get issue',
            description: 'Fetch one issue with its description, attachments, watchers and plugin data ' \
-                        'where permitted, and optionally its notes and history.',
+                        "where permitted, and optionally its notes and history. #{CUSTOM_FIELD_LABELS}",
            permission: :view_issues,
            scopes: %i[view_issue_watchers],
            plugin_scopes: { redmine_checklists: %i[view_checklists] },

@@ -15,6 +15,12 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 - `list_projects` takes `include_custom_fields` (default `false`) to add the same `custom_fields` to
   every row, so one field can be read across all projects in a few paged calls. The query count
   does not grow with the page size. Without the flag the rows are unchanged.
+- Every custom field row (`get_issue`, `get_project`, `list_projects`, `list_time_entries`, and the
+  `custom_fields` read back by `create_issue`, `update_issue` and `log_time`) gives its `format`, and
+  a field stored as an id (`enumeration`, `user`, `version`) names it in `label`, an array for a
+  multiple field. `value` is unchanged and is still what the write tools take. A user outside
+  `Principal.visible`, a version whose issues the caller may not see, or a target deleted since has
+  a `null` label. The labels cost one query per format, whatever the page size (#9).
 - A plugin setting lists the custom fields to hide from every MCP client, checked by type on the
   settings page. An excluded field is left out of every reply and of the issue history, refused as a
   value to set, and unknown as a filter, sort or grouping, including in a saved query's own sort and

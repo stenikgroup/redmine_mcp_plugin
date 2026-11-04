@@ -26,7 +26,7 @@ module RedmineMcpPlugin
                         'page, so limit 1 is enough to answer "how many hours". Use group_by to ' \
                         'total per person, project, activity, issue or date. Call with describe: true ' \
                         'to list the filters, operators, sortable and groupable fields this Redmine ' \
-                        'accepts, including custom fields.',
+                        "accepts, including custom fields. #{CUSTOM_FIELD_LABELS}",
            permission: :view_time_entries,
            schema: {
              'type' => 'object',
@@ -109,7 +109,11 @@ module RedmineMcpPlugin
         limit   = limit_for(arguments)
         offset  = offset_for(arguments)
         scope   = query.results_scope.preload(:activity, :user, :project, :custom_values, issue: :project)
-        rows    = scope.offset(offset).limit(limit).map { |entry| summarise(entry) }
+        entries = scope.offset(offset).limit(limit).to_a
+        # Core's own rule, which honours the roles a field is restricted to.
+        values  = entries.to_h { |entry| [entry, shown_custom_field_values(entry.visible_custom_field_values(user))] }
+        labels  = custom_value_labels(values.values.flatten)
+        rows    = entries.map { |entry| summarise(entry, values[entry], labels) }
 
         payload = paged(total: scope.count, offset: offset, key: :entries, rows: rows)
         # Core's SQL aggregates cover the whole filtered set, not the page.
@@ -167,7 +171,7 @@ module RedmineMcpPlugin
         activity.parent_id || activity.id
       end
 
-      def summarise(entry)
+      def summarise(entry, custom_values, labels)
         {
           id: entry.id,
           user: entry.user && { id: entry.user_id, name: entry.user.name },
@@ -178,7 +182,7 @@ module RedmineMcpPlugin
                                       name: entry.project.name },
           issue: issue_field(entry),
           comments: entry.comments,
-          custom_fields: custom_fields_for(entry)
+          custom_fields: custom_values.map { |value| custom_field_row(value, labels) }
         }
       end
 
@@ -188,11 +192,6 @@ module RedmineMcpPlugin
         return nil if entry.issue.nil?
 
         { id: entry.issue_id, subject: (entry.issue.subject if entry.issue.visible?(user)) }
-      end
-
-      # Core's own rule, which honours the roles a field is restricted to.
-      def custom_fields_for(entry)
-        shown_custom_fields(entry.visible_custom_field_values(user))
       end
     end
   end
