@@ -8,7 +8,7 @@ module RedmineMcpPlugin
            description: 'Fetch one issue with its description, attachments, watchers and plugin data ' \
                         "where permitted, and optionally its notes and history. #{CUSTOM_FIELD_LABELS}",
            permission: :view_issues,
-           scopes: %i[view_issue_watchers],
+           scopes: %i[view_issue_watchers view_private_notes],
            plugin_scopes: { redmine_checklists: %i[view_checklists] },
            schema: {
              'type' => 'object',
@@ -83,7 +83,9 @@ module RedmineMcpPlugin
       end
 
       # Journal#notes can be private (private_notes), and core gates that on
-      # :view_private_notes. Journal.visible applies exactly that rule.
+      # :view_private_notes. Journal.visible applies that rule from roles only,
+      # in SQL that ignores OAuth scopes, so the scope-aware allowed_to? check
+      # follows it, as in Issue#visible_journals_with_index.
       def journals_for(issue)
         # Core's history lookup names a project by Project#visible?, which reads User.current.
         raise ToolError, 'You do not have permission to do that' unless User.current == user
@@ -92,7 +94,10 @@ module RedmineMcpPlugin
         history = Class.new { include IssuesHelper }.new
         # The plugin's own history leaves its changes out for anyone without view_checklists.
         checklists = !plugin?(:redmine_checklists) || user.allowed_to?(:view_checklists, issue.project)
+        private_notes = user.allowed_to?(:view_private_notes, issue.project)
         issue.journals.visible(user).includes(:user).order(:created_on).filter_map do |journal|
+          next if journal.private_notes? && journal.user_id != user.id && !private_notes
+
           details = journal.visible_details(user)
           details = details.reject { |detail| detail.property == 'cf' && excluded_custom_field?(detail.prop_key) }
           details = details.reject { |detail| checklist_detail?(detail) } unless checklists

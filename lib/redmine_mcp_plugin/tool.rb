@@ -246,16 +246,21 @@ module RedmineMcpPlugin
     end
 
     # Visibility only, like fetch_project; the caller adds authorize! for its permission.
+    # Issue.visible is SQL built on roles and ignores OAuth scopes; Issue#visible?
+    # goes through allowed_to?(:view_issues), so a token without view_issues
+    # cannot write to an issue and read it back in the reply.
     def fetch_issue(id)
       issue = Issue.visible(user).find_by(id: id.to_i)
-      raise ToolError, "No visible issue with id #{id.inspect}" if issue.nil?
+      raise ToolError, "No visible issue with id #{id.inspect}" if issue.nil? || !issue.visible?(user)
 
       issue
     end
 
+    # Same reason. Stricter than core, which updates a news item under
+    # manage_news alone, but the reply returns fields only view_news may read.
     def fetch_news(id)
       news = News.visible(user).find_by(id: id.to_i)
-      raise ToolError, "No visible news with id #{id.inspect}" if news.nil?
+      raise ToolError, "No visible news with id #{id.inspect}" if news.nil? || !news.visible?(user)
 
       news
     end
@@ -583,9 +588,10 @@ module RedmineMcpPlugin
     # Choices named in a refusal, capped so a user field on a big instance stays readable.
     MAX_CHOICES = 25
 
-    # A filter, sort or group key on a custom field, own or reached through an
-    # association: cf_12, issue.cf_12, project.cf_12, author.cf_12.
-    CUSTOM_FIELD_KEY = /(?:\A|\.)cf_(\d+)\z/
+    # Every custom field in a filter, sort or group key: own, reached through an
+    # association, or the head of a chained filter on a version or user field:
+    # cf_12, issue.cf_12, project.cf_12, cf_12.status, cf_12.cf_14.
+    CUSTOM_FIELD_KEY = /(?:\A|\.)cf_(\d+)(?=\.|\z)/
 
     # The fields an administrator keeps away from every MCP client, read once per call.
     def excluded_custom_field_ids
@@ -596,8 +602,9 @@ module RedmineMcpPlugin
       excluded_custom_field_ids.include?(id.to_i)
     end
 
+    # Any excluded field in the key makes it excluded: cf_12.cf_14 reads both.
     def excluded_custom_field_key?(key)
-      (match = CUSTOM_FIELD_KEY.match(key.to_s)) && excluded_custom_field?(match[1])
+      key.to_s.scan(CUSTOM_FIELD_KEY).flatten.any? { |id| excluded_custom_field?(id) }
     end
 
     # Core's visible or editable values, minus the excluded fields. Every
@@ -644,13 +651,17 @@ module RedmineMcpPlugin
     end
 
     # Same reason as the attributes: core keeps only the custom fields this user may edit here.
+    # A refused field is named only when the caller may read it on this record;
+    # any other id stays a number, so a refusal names no excluded, other-type
+    # or role-restricted field.
     def unknown_custom_fields(record, ids)
       editable = shown_custom_field_values(record.editable_custom_field_values(user)).map { |value| value.custom_field_id.to_s }
       unknown  = Array(ids).map(&:to_s) - editable
       return nil if unknown.empty?
 
-      names = CustomField.where(id: unknown).pluck(:id, :name).to_h
-      unknown.map { |id| names[id.to_i] || "id #{id}" }.join(', ')
+      names = shown_custom_field_values(record.visible_custom_field_values(user))
+              .to_h { |value| [value.custom_field_id.to_s, value.custom_field.name] }
+      unknown.map { |id| names[id] || "id #{id}" }.join(', ')
     end
 
     # The values to assign, by field id: refused by name when the field cannot

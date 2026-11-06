@@ -36,6 +36,24 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   time, lifetime and revocation time. Users reported having to reconnect their MCP connector, and
   nothing in a production log at `warn` showed why.
 
+### Security
+
+- A write tool on an issue or a news item now refuses a token that may not view it. An OAuth token
+  scoped to `edit_issues` or `add_issue_notes` without `view_issues` could update an issue, watch
+  it, add a note or an attachment, and read the issue back in the reply, where core's REST API
+  answers 403. `update_news` likewise needs `view_news`, which is stricter than core.
+- `get_issue` no longer returns another user's private notes to an OAuth token without
+  `view_private_notes`, whatever the user's role grants, as core's issue page and REST API.
+  `view_private_notes` is now advertised as a scope, read-only mode included. **Upgrade step:**
+  enable "View private notes" on the MCP application in Administration → Applications, or the next
+  consent fails with `invalid_scope`.
+- An excluded custom field could still be filtered on through a chained key on a version or user
+  field (`cf_N.status`, `cf_N.due_date`, `cf_N.cf_M`), in `search_issues` and `list_time_entries`.
+  Every field in a key is now checked.
+- A refused custom field value named the field even when the caller may not read it: an excluded
+  field, a field of another type, or one restricted to other roles. Such a field is now named by id
+  only.
+
 ## [0.2.1] - 2026-10-27
 
 ### Fixed
