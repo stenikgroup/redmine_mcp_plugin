@@ -7,6 +7,8 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-06
+
 ### Added
 
 - `get_project` returns the project's `custom_fields`, in the `{ id, name, value }` shape of
@@ -36,7 +38,15 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   time, lifetime and revocation time. Users reported having to reconnect their MCP connector, and
   nothing in a production log at `warn` showed why.
 
+### Changed
+
+- Redmine's plugin list names Amaury Balmer as the plugin's author, linking to this fork's owner.
+  The README keeps the credits for João Figueira and Stenik.
+
 ### Security
+
+Four vulnerabilities, all rated low, found by a security audit of `3af02e6`. The first two and part
+of the fourth are still in the upstream projects; the README's security notice says which.
 
 - A write tool on an issue or a news item now refuses a token that may not view it. An OAuth token
   scoped to `edit_issues` or `add_issue_notes` without `view_issues` could update an issue, watch
@@ -107,6 +117,8 @@ The version declared by
 unchanged, by [stenikgroup/redmine_mcp_plugin](https://github.com/stenikgroup/redmine_mcp_plugin)
 through all of its work. This fork starts from stenikgroup's last commit, `19ce030`.
 
+[Unreleased]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/herewithme/redmine_mcp_plugin/compare/19ce030...v0.2.0
 [0.1.0]: https://github.com/stenikgroup/redmine_mcp_plugin/tree/19ce030
