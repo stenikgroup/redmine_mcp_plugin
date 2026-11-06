@@ -232,6 +232,20 @@ A 401 from `/mcp` carries `WWW-Authenticate: Bearer realm="Redmine", resource_me
 at the first of those. Both are served only while the endpoint and OAuth2 mode are enabled, and 404
 otherwise: advertising a disabled endpoint only sends clients down a dead end.
 
+When the request presented a bearer token that is expired, revoked, unknown or owned by a locked
+user, the challenge adds `error="invalid_token"` and an `error_description` (RFC 6750 3.1), which
+tells the client to refresh its token rather than ask the user to authorize again. A request with no
+token gets no error code. Each refused token is logged at `warn`, so it shows even when Redmine logs
+nothing below that level:
+
+```
+[redmine_mcp_plugin] OAuth2 token refused (expired): token=42 user=5 app=1 created_at=... expires_in=7200 revoked_at=
+```
+
+An expired token is refused about every two hours per connected user, before the client refreshes
+it: those lines are expected. A user who had to reconnect shows as a token that is refused and then
+never followed by a new one for the same user and application in `oauth_access_tokens`.
+
 Redmine has no dynamic client registration (RFC 7591), so no `registration_endpoint` is advertised.
 Create the application by hand and give the client its id and secret.
 

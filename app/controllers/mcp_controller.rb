@@ -130,10 +130,15 @@ class McpController < ApplicationController
         # With realm alone there is nothing to discover: the client knows it
         # should present a bearer token but not which authorization server
         # issues one, which is where every automated OAuth2 flow stopped.
-        response.set_header(
-          'WWW-Authenticate',
-          %(Bearer realm="Redmine", resource_metadata="#{oauth_protected_resource_url}")
-        )
+        challenge = %(Bearer realm="Redmine", resource_metadata="#{oauth_protected_resource_url}")
+        # error="invalid_token" only when a bearer token was presented: RFC 6750
+        # 3.1 forbids an error code on a request that carried no credential.
+        # Without it a client cannot tell an expired token, which it should
+        # refresh, from a missing one, which needs a new authorization.
+        if result.bearer_error
+          challenge += %(, error="#{result.bearer_error}", error_description="#{result.error}")
+        end
+        response.set_header('WWW-Authenticate', challenge)
       end
       return render json: { error: result.error }, status: result.status
     end
