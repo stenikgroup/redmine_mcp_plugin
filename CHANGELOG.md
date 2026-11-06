@@ -26,6 +26,16 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   value to set, and unknown as a filter, sort or grouping, including in a saved query's own sort and
   grouping. A free-text `search` still matches a searchable field.
 
+### Changed
+
+- A 401 from `/mcp` for an expired, revoked, unknown or orphaned OAuth2 token now carries
+  `error="invalid_token"` and an `error_description` in its `WWW-Authenticate` challenge, as RFC 6750
+  3.1 requires, so a client can tell a token to refresh from a missing one. A request with no token
+  is answered as before.
+- Each refused OAuth2 token is logged at `warn` with its reason, id, user, application, creation
+  time, lifetime and revocation time. Users reported having to reconnect their MCP connector, and
+  nothing in a production log at `warn` showed why.
+
 ## [0.2.1] - 2026-10-27
 
 ### Fixed

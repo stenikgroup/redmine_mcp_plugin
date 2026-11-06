@@ -80,6 +80,92 @@ class McpControllerTest < Redmine::ControllerTest
     assert_response :unauthorized
   end
 
+  # --- OAuth2 -------------------------------------------------------------
+
+  def oauth_token(attributes = {})
+    application = Doorkeeper::Application.create!(name: 'MCP test', redirect_uri: 'https://client.example/callback',
+                                                  scopes: 'view_project view_issues')
+    Doorkeeper::AccessToken.create!({ application: application, resource_owner_id: 2,
+                                      scopes: 'view_project view_issues', expires_in: 2.hours }.merge(attributes))
+  end
+
+  # The token as presented on the wire. Core hashes tokens before storing them,
+  # so only the record that was just created still knows the plaintext.
+  def bearer_headers(access_token)
+    { 'Authorization' => "Bearer #{access_token.plaintext_token}" }
+  end
+
+  def challenge
+    response.headers['WWW-Authenticate'].to_s
+  end
+
+  def capture_log
+    io = StringIO.new
+    previous = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(io)
+    yield
+    io.string
+  ensure
+    Rails.logger = previous
+  end
+
+  def test_valid_oauth2_token_is_accepted
+    post_mcp rpc('tools/list'), bearer_headers(oauth_token)
+    assert_response :success
+  end
+
+  # RFC 6750 3.1: no error code when the request carried no credential at all.
+  def test_missing_token_challenge_has_no_error_code
+    post_mcp rpc('tools/list')
+    assert_response :unauthorized
+    assert_match 'resource_metadata=', challenge
+    assert_no_match 'error=', challenge
+  end
+
+  def test_expired_token_is_answered_invalid_token_and_logged
+    access_token = oauth_token(created_at: 3.hours.ago)
+    log = capture_log { post_mcp rpc('tools/list'), bearer_headers(access_token) }
+
+    assert_response :unauthorized
+    assert_match 'error="invalid_token"', challenge
+    assert_match 'resource_metadata=', challenge
+    assert_match "OAuth2 token refused (expired): token=#{access_token.id} user=2", log
+  end
+
+  def test_revoked_token_is_answered_invalid_token_and_logged
+    access_token = oauth_token(revoked_at: 1.minute.ago)
+    log = capture_log { post_mcp rpc('tools/list'), bearer_headers(access_token) }
+
+    assert_response :unauthorized
+    assert_match 'error="invalid_token"', challenge
+    assert_match "OAuth2 token refused (revoked): token=#{access_token.id}", log
+  end
+
+  def test_unknown_token_is_answered_invalid_token_and_logged
+    log = capture_log { post_mcp rpc('tools/list'), 'Authorization' => 'Bearer nonsense' }
+
+    assert_response :unauthorized
+    assert_match 'error="invalid_token"', challenge
+    assert_match 'OAuth2 token refused (unknown): token not found', log
+  end
+
+  def test_token_of_a_locked_user_is_answered_invalid_token
+    access_token = oauth_token
+    User.find(2).lock!
+    log = capture_log { post_mcp rpc('tools/list'), bearer_headers(access_token) }
+
+    assert_response :unauthorized
+    assert_match 'error="invalid_token"', challenge
+    assert_match "OAuth2 token refused (inactive user): token=#{access_token.id}", log
+  end
+
+  # An API key failure is not a bearer token failure: no error code to send.
+  def test_invalid_api_key_challenge_has_no_error_code
+    post_mcp rpc('tools/list'), 'X-Redmine-API-Key' => 'nonsense'
+    assert_response :unauthorized
+    assert_no_match 'error=', challenge
+  end
+
   # --- transport ----------------------------------------------------------
 
   def test_malformed_json_is_a_parse_error

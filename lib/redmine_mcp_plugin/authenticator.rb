@@ -9,7 +9,9 @@ module RedmineMcpPlugin
   # takes; the plugin's contribution is making each branch individually
   # switchable, and refusing to fall through to anything not enabled.
   class Authenticator
-    Result = Struct.new(:user, :mode, :scopes, :error, :status, keyword_init: true) do
+    # bearer_error is the RFC 6750 error code for the WWW-Authenticate
+    # challenge, set only when a bearer token was presented and refused.
+    Result = Struct.new(:user, :mode, :scopes, :error, :status, :bearer_error, keyword_init: true) do
       def ok? = user.present?
     end
 
@@ -63,11 +65,15 @@ module RedmineMcpPlugin
       return nil unless bearer_token.present?
 
       access_token = Doorkeeper.authenticate(@request)
-      return failure('Invalid or expired OAuth2 access token', :unauthorized) if access_token.nil?
-      return failure('OAuth2 access token is revoked or expired', :unauthorized) unless access_token.accessible?
+      return invalid_token('Invalid or expired OAuth2 access token', 'unknown') if access_token.nil?
+
+      unless access_token.accessible?
+        reason = access_token.revoked? ? 'revoked' : 'expired'
+        return invalid_token('OAuth2 access token is revoked or expired', reason, access_token)
+      end
 
       user = User.active.find_by(id: access_token.resource_owner_id)
-      return failure('OAuth2 token does not resolve to an active user', :unauthorized) if user.nil?
+      return invalid_token('OAuth2 token does not resolve to an active user', 'inactive user', access_token) if user.nil?
 
       scopes = access_token.scopes.all.map(&:to_sym)
       user.oauth_scope = scopes
@@ -146,6 +152,24 @@ module RedmineMcpPlugin
 
     def failure(message, status)
       Result.new(error: message, status: status)
+    end
+
+    # A refused bearer token. The client is told invalid_token (RFC 6750 3.1),
+    # which is what tells it to refresh rather than start a new authorization.
+    #
+    # Logged at warn because a production Redmine often logs nothing below it,
+    # and this line is the only trace of why a connector stopped working: the
+    # client sees the reason, the administrator otherwise does not.
+    def invalid_token(message, reason, access_token = nil)
+      detail = if access_token
+                 "token=#{access_token.id} user=#{access_token.resource_owner_id} " \
+                   "app=#{access_token.application_id} created_at=#{access_token.created_at&.utc&.iso8601} " \
+                   "expires_in=#{access_token.expires_in.inspect} revoked_at=#{access_token.revoked_at&.utc&.iso8601}"
+               else
+                 'token not found'
+               end
+      Rails.logger.warn("[redmine_mcp_plugin] OAuth2 token refused (#{reason}): #{detail}")
+      Result.new(error: message, status: :unauthorized, bearer_error: 'invalid_token')
     end
   end
 end
