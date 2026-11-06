@@ -684,4 +684,57 @@ class McpControllerTest < Redmine::ControllerTest
     assert_not result['isError'], result.inspect
     assert_not result['structuredContent'].key?('groups')
   end
+
+  # A version or user field offers chained filters on the target's own fields:
+  # cf_N.status reads which version an issue holds, cf_N.cf_M which user.
+  def test_chained_keys_on_an_excluded_field_are_unknown
+    version = IssueCustomField.create!(name: 'Target version', field_format: 'version', is_filter: true,
+                                       is_for_all: true, tracker_ids: Tracker.pluck(:id))
+    reviewer = IssueCustomField.create!(name: 'Reviewer', field_format: 'user', is_filter: true,
+                                        is_for_all: true, tracker_ids: Tracker.pluck(:id))
+    team = UserCustomField.create!(name: 'Team', field_format: 'string', is_filter: true, visible: true)
+    issue = Issue.find(1)
+    issue.custom_field_values = { version.id.to_s => '2', reviewer.id.to_s => '3' }
+    issue.save!
+    chained = [
+      { "cf_#{version.id}.status" => 'locked' },
+      { "cf_#{version.id}.due_date" => { 'operator' => '*' } },
+      { "cf_#{reviewer.id}.cf_#{team.id}" => 'core' }
+    ]
+    search = ->(filters) { call_tool('search_issues', { 'status' => 'all', 'filters' => filters }) }
+    chained.each { |filters| assert_not search.call(filters)['isError'], filters.inspect }
+
+    exclude_custom_fields(version.id, reviewer.id)
+    chained.each { |filters| assert search.call(filters)['isError'], filters.inspect }
+    described = call_tool('search_issues', { 'describe' => true })['structuredContent']
+    assert(described['filters'].none? { |filter| filter['field'] =~ /cf_(#{version.id}|#{reviewer.id})\b/ })
+
+    # Excluded at the tail of the chain only.
+    exclude_custom_fields(team.id)
+    assert search.call({ "cf_#{reviewer.id}.cf_#{team.id}" => 'core' })['isError']
+  end
+
+  def test_chained_keys_on_an_excluded_time_entry_field_are_unknown
+    version = TimeEntryCustomField.create!(name: 'Billed version', field_format: 'version', is_filter: true,
+                                           visible: true)
+    filters = { 'project' => 'ecookbook', 'filters' => { "cf_#{version.id}.status" => 'locked' } }
+    assert_not call_tool('list_time_entries', filters)['isError']
+    exclude_custom_fields(version.id)
+    assert call_tool('list_time_entries', filters)['isError']
+  end
+
+  # The refusal names a field only when the caller may read it on the issue.
+  def test_a_refused_field_is_named_only_when_the_caller_may_read_it
+    enable_mcp('read_only' => '0', 'excluded_custom_fields' => ['2'])
+    restricted = IssueCustomField.create!(name: 'Margin', field_format: 'string', is_for_all: true,
+                                          visible: false, role_ids: [3], tracker_ids: Tracker.pluck(:id))
+    names = { 2 => CustomField.find(2).name, 3 => CustomField.find(3).name, restricted.id => 'Margin' }
+    names.each do |id, name|
+      result = call_tool('update_issue', { 'issue' => 1, 'custom_field_values' => { id.to_s => 'x' } })
+      text   = result['content'].first['text']
+      assert result['isError'], result.inspect
+      assert_match(/\bid #{id} cannot be set here/, text)
+      assert_not_includes text, name
+    end
+  end
 end

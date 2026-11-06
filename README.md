@@ -87,10 +87,12 @@ client, whatever the user may see of it in Redmine:
 - left out of every reply that carries custom fields (`get_issue`, `get_project`, `list_projects`,
   `list_time_entries`, `get_issue_fields`, `list_enumerations`, the state a write echoes back) and
   of the issue history;
-- refused as a value to set, like a field the user may not edit. A required excluded field therefore
-  blocks a create through MCP, with core's own "cannot be blank";
+- refused as a value to set, like a field the user may not edit, and named in the refusal by id
+  only. A required excluded field therefore blocks a create through MCP, with core's own "cannot be
+  blank";
 - unknown to `search_issues` and `list_time_entries` as a filter, sort or grouping, including
-  `issue.cf_N` and `project.cf_N`. A saved query that sorts or groups on it runs unsorted or
+  `issue.cf_N` and `project.cf_N`, and in any position of a chained filter: `cf_N.status`,
+  `cf_N.cf_M` and `cf_M.cf_N` are all unknown. A saved query that sorts or groups on it runs unsorted or
   ungrouped on that field; a filter it stores still applies.
 
 `search` still matches the field's text when the field is searchable: clear its Searchable flag too.
@@ -110,6 +112,7 @@ sections.
 | `view_project` | View projects | Project |
 | `view_issues` | View Issues | Issue tracking |
 | `view_issue_watchers` | View watchers list | Issue tracking |
+| `view_private_notes` | View private notes | Issue tracking |
 | `view_wiki_pages` | View wiki | Wiki |
 | `view_time_entries` | View spent time | Time tracking |
 | `view_news` | View news | News |
@@ -140,7 +143,7 @@ this per request, so installing or removing one of those plugins changes the adv
 adding a tool does. Several scopes gate no tool but one parameter, or one part of a reply:
 `set_notes_private` for `private_notes: true`, `manage_subtasks` for `parent`, `add_issue_watchers`
 and `delete_issue_watchers` for watchers, `set_issues_private` and `set_own_issues_private` for
-`is_private`, `view_issue_watchers` and `view_checklists` for what `get_issue` includes, `edit_tags`
+`is_private`, `view_issue_watchers`, `view_private_notes` and `view_checklists` for what `get_issue` includes, `edit_tags`
 and `create_tags` for tags. A permission a tool checks at runtime must be advertised, or no token can
 ever carry it.
 
@@ -163,7 +166,7 @@ Ours advertises the permissions the tools on `/mcp` declare (`mcp_permissions`) 
 check at runtime (`scopes`), an extension's tools included, dropping the write tools while the server
 is read-only and the tools and scopes of plugins that are not installed, intersected with what
 Doorkeeper will accept.
-Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_wiki_pages`,
+Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_private_notes`, `view_wiki_pages`,
 `view_time_entries` and `view_news`; with writes on, add `add_issues`, `add_issue_notes`,
 `edit_issues`, `edit_own_issues`, `edit_own_issue_notes`, `log_time`, `set_notes_private`,
 `manage_subtasks`, `add_issue_watchers`, `delete_issue_watchers`, `set_issues_private`,
@@ -262,6 +265,13 @@ argument** - so they honour roles but are blind to OAuth scopes. A token scoped 
 but not `view_issues` would still see issues if `.visible` were the only check. In the other
 direction, `allowed_to?` alone would return rows from projects the user is not a member of.
 
+A write tool checks its own permission (`edit_issues`, `add_issue_notes`, `manage_news`), not the
+read one, so `.visible` would be the only read check on the record it writes to and reads back.
+Every tool that takes an issue or a news id therefore also calls the scope-aware `Issue#visible?` or
+`News#visible?`: a token scoped to `edit_issues` without `view_issues` gets "No visible issue", as
+core's REST API answers 403. For news this is stricter than core, which updates a news item under
+`manage_news` alone.
+
 `User#admin?` is scope-aware too: an admin acts as an admin only when the token carries the `admin`
 scope, which this server never requests. Through the plugin an admin sees and does what their
 memberships grant, and nothing more.
@@ -289,15 +299,15 @@ Of the four that this plugin exercises:
 
 ### Private notes
 
-Notes marked private are filtered by `Journal.visible`, which is core's own rule: a journal is
-visible if it is not private, or the caller wrote it, or the caller's role holds
-`view_private_notes`.
+Notes marked private follow core's rule: a journal is visible if it is not private, or the caller
+wrote it, or the caller holds `view_private_notes`. `get_issue` applies `Journal.visible`, then
+checks `view_private_notes` through the scope-aware `allowed_to?`, as core's issue page and REST API
+do.
 
-That filter is built on `Project.allowed_to_condition` and is therefore **not narrowed further by
-OAuth scope**. A token whose scopes omit `view_private_notes` will still see private notes if the
-user's role grants it. This is deliberate on our side: roles are the access boundary we rely on, and
-token scopes are a second, coarser restriction on top of them - not the thing that decides who may
-read what.
+`Journal.visible` alone is not enough: it is SQL built on `Project.allowed_to_condition`, which reads
+roles and ignores OAuth scopes. A token whose scopes omit `view_private_notes` therefore gets no
+private note written by someone else, even when the user's role grants it. That is why
+`view_private_notes` is advertised as a scope, read-only mode included.
 
 Writing one is the other way round: `add_issue_note` and `update_issue_note` with `private_notes: true`
 check `set_notes_private` through the scope-aware `allowed_to?`, which is why that permission is
@@ -344,7 +354,7 @@ while read-only mode is on, which is the default.
 | `create_news` (write) | `manage_news`. Publishes at once and, when `news_added` is a notified event, emails project members and news watchers; the tool tells the agent to get explicit confirmation first |
 | `update_news` (write) | `manage_news`. Editing sends no email |
 
-`get_issue` respects per-field custom field visibility and filters private notes by role, as above.
+`get_issue` respects per-field custom field visibility and filters private notes by role and token scope, as above.
 Its history reads as the issue page's: a custom field by its name, a reference without `_id` (`status`,
 `assigned_to`, `parent`, `child`), a checklist change as the items added, removed, done, undone and
 renamed, shown only under `view_checklists` as the plugin's own history does, and no journal with
@@ -386,7 +396,9 @@ is invalid".
 
 Custom field values are checked before the save, on `create_issue`, `update_issue` and `log_time`
 alike, so a wrong one costs one refusal that teaches the fix rather than core's bare "is not included
-in the list" or "cannot be blank". A field the caller may not set is refused by name. For a format
+in the list" or "cannot be blank". A field the caller may not set is refused by name when the
+caller may read it on that record, and by id otherwise, so a refusal names no field that is excluded,
+of another type, or hidden from the caller's roles. For a format
 with a list of values (list, key/value list, user, version, bool), a value is the stored one (the
 option, the id, `1` or `0`); a label that names exactly one value is accepted in its place, case
 aside, as are `"me"` for a user field and `true`/`false` for a bool, and the value already stored
