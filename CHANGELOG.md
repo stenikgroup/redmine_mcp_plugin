@@ -7,6 +7,23 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 
 ## [Unreleased]
 
+### Added
+
+- Nine tools for the structure of a project, each mapped to a Redmine permission, which is also its
+  OAuth scope, and to a REST API action of Redmine 7.0: `create_project`, `update_project`,
+  `close_project`, `reopen_project`, `create_version`, `update_version`, `create_issue_category`,
+  `update_issue_category` and `update_membership`, plus `list_memberships` to read the members.
+  They refuse, naming the parameter, what core drops in silence: a field the role or the token may
+  not set, a parent the caller may not extend, a version `sharing` outside `allowed_sharings`, a role
+  outside the caller's managed roles. Nothing can be deleted. **Upgrade step:** with writes on, the
+  server now advertises `add_project`, `add_subprojects`, `edit_project`, `close_project`,
+  `select_project_publicity`, `select_project_modules`, `manage_members`, `manage_versions` and
+  `manage_categories`, and `view_members` in read-only mode too; enable them on the MCP application
+  in Administration → Applications, or the next consent fails with `invalid_scope`.
+- `get_project` returns `inherit_members`.
+- `TODO.md` lists the tools held back: those with no REST API action yet, those that need the
+  `admin` scope, and what is not planned.
+
 ## [0.3.0] - 2026-11-06
 
 ### Added

@@ -25,6 +25,7 @@ module RedmineMcpPlugin
           Tools::ListEnumerations,
           Tools::ListUsers,
           Tools::ListTimeEntries,
+          Tools::ListMemberships,
           Tools::GetIssueFields,
           Tools::CreateIssue,
           Tools::UpdateIssue,
@@ -35,7 +36,16 @@ module RedmineMcpPlugin
           Tools::UpdateIssueRelations,
           Tools::LogTime,
           Tools::CreateNews,
-          Tools::UpdateNews
+          Tools::UpdateNews,
+          Tools::CreateProject,
+          Tools::UpdateProject,
+          Tools::CloseProject,
+          Tools::ReopenProject,
+          Tools::CreateVersion,
+          Tools::UpdateVersion,
+          Tools::CreateIssueCategory,
+          Tools::UpdateIssueCategory,
+          Tools::UpdateMembership
         ]
       end
     end

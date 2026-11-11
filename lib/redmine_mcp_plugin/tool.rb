@@ -949,6 +949,238 @@ module RedmineMcpPlugin
       }
     end
 
+    # --- project structure: projects, versions, categories, members -----------
+
+    # allowed_to? is false for every write on a closed project, which would read
+    # as a permissions problem; name the real cause, as require_module! does.
+    # get_project already returns the status to anyone who can see the project.
+    def authorize_open!(permission, project)
+      raise ToolError, "Project #{project.identifier} is closed; reopen it first" if project.closed?
+
+      authorize!(permission, project)
+    end
+
+    def save_or_refuse!(record, act)
+      return if record.save
+
+      raise ToolError, "Could not #{act}: #{record.errors.full_messages.join('; ')}"
+    end
+
+    # parameter => core attribute, for the values that need no resolver.
+    PROJECT_ATTRIBUTES = { 'name' => 'name', 'identifier' => 'identifier', 'description' => 'description',
+                           'homepage' => 'homepage', 'is_public' => 'is_public',
+                           'inherit_members' => 'inherit_members' }.freeze
+    # Core gates these three on a permission and drops them silently without it.
+    PROJECT_GATED = { 'is_public' => :select_project_publicity, 'enabled_module_names' => :select_project_modules,
+                      'inherit_members' => :manage_members }.freeze
+    PROJECT_PARAMETERS = PROJECT_ATTRIBUTES.invert.merge('parent_id' => 'parent', 'enabled_module_names' => 'enabled_modules',
+                                                         'tracker_ids' => 'trackers',
+                                                         'custom_field_values' => 'custom_field_values').freeze
+
+    # The attributes to assign to a project. Every check runs and each refusal
+    # is charged to its parameter, as for an issue.
+    def project_attributes_from(project, arguments, problems)
+      attributes = PROJECT_ATTRIBUTES.each_with_object({}) do |(name, attribute), out|
+        out[attribute] = arguments[name] unless arguments[name].nil?
+      end
+      resolvers = { 'parent_id'            => ['parent', ->(value) { project_parent_id(project, value) }],
+                    'enabled_module_names' => ['enabled_modules', ->(value) { project_module_names(value) }],
+                    'tracker_ids'          => ['trackers', ->(value) { project_tracker_ids(value) }],
+                    'custom_field_values'  => ['custom_field_values', ->(value) { custom_field_values_for(project, value) }] }
+      resolvers.each do |attribute, (name, resolve)|
+        next if arguments[name].nil? || arguments[name] == {}
+
+        value = blocked(problems, name) { resolve.call(arguments[name]) }
+        attributes[attribute] = value unless value.nil?
+      end
+      attributes.keys.each do |attribute|
+        next if project.safe_attribute?(attribute, user)
+
+        problems << project_blocked_name(attribute)
+        attributes.delete(attribute)
+      end
+      attributes
+    end
+
+    def project_blocked_name(attribute)
+      name = PROJECT_PARAMETERS.fetch(attribute, attribute)
+      gate = PROJECT_GATED[attribute]
+      gate ? "#{name} (needs #{permission_labels(gate)})" : name
+    end
+
+    # Core's own rule: a subproject needs add_subprojects on the parent, a root
+    # project add_project, and core answers either refusal "Parent is invalid".
+    def project_parent_id(project, value)
+      parent = value.to_s == 'none' ? nil : fetch_project(value)
+      return parent&.id.to_s if !project.new_record? && parent&.id == project.parent_id
+
+      unless project.allowed_parents(user).include?(parent)
+        cause = parent ? "#{permission_labels(:add_subprojects)} on #{parent.identifier}" : permission_labels(:add_project)
+        raise ToolError, "needs #{cause}"
+      end
+      raise ToolError, "#{parent.identifier} is closed" if parent && !parent.active?
+
+      parent&.id.to_s
+    end
+
+    def project_module_names(values)
+      known   = Redmine::AccessControl.available_project_modules.map(&:to_s)
+      names   = Array(values).map(&:to_s)
+      unknown = names - known
+      raise ToolError, "no module #{unknown.join(', ')}; modules: #{known.sort.join(', ')}" if unknown.any?
+
+      names
+    end
+
+    def project_tracker_ids(values)
+      trackers = Tracker.sorted.to_a
+      Array(values).map do |value|
+        tracker = trackers.detect { |t| t.name == value.to_s || t.id.to_s == value.to_s }
+        raise ToolError, "no tracker #{value.inspect}; trackers: #{trackers.map(&:name).join(', ')}" if tracker.nil?
+
+        tracker.id
+      end
+    end
+
+    def project_state(project)
+      {
+        id: project.id,
+        identifier: project.identifier,
+        name: project.name,
+        description: project.description,
+        homepage: project.homepage,
+        status: project.status,
+        is_public: project.is_public?,
+        parent_id: project.parent_id,
+        inherit_members: project.inherit_members?,
+        created_on: iso(project.created_on),
+        updated_on: iso(project.updated_on),
+        enabled_modules: project.enabled_module_names.sort,
+        trackers: project.trackers.map { |t| { id: t.id, name: t.name } },
+        # Categories and versions are cheap and are what a model needs before
+        # it can create or filter an issue sensibly.
+        issue_categories: project.issue_categories.map { |c| { id: c.id, name: c.name } },
+        versions: project.shared_versions.map { |v| { id: v.id, name: v.name, status: v.status } },
+        # Core's own rule, which honours the roles a field is restricted to.
+        custom_fields: shown_custom_fields(project.visible_custom_field_values(user))
+      }
+    end
+
+    def saved_project_state(project)
+      project_state(Project.find(project.id)).merge(url: absolute_url(:project_url, project))
+    end
+
+    # A write replies with the saved record, so the caller must be allowed to
+    # read it: view_issues for a version or a category, as core's own pages.
+    # The same message whether it does not exist or may not be seen.
+    def fetch_version(id)
+      version = Version.find_by(id: id.to_i)
+      raise ToolError, "No visible version with id #{id.inspect}" if version.nil? || !readable_in?(version.project, :view_issues)
+
+      version
+    end
+
+    def readable_in?(project, permission)
+      project.visible?(user) && user.allowed_to?(permission, project)
+    end
+
+    # Project.visible is SQL built on roles and ignores OAuth scopes;
+    # Project#visible? goes through allowed_to?(:view_project).
+    def fetch_readable_project(identifier)
+      project = fetch_project(identifier)
+      raise ToolError, "No visible project matching #{identifier.inspect}" unless project.visible?(user)
+
+      project
+    end
+
+    # Core drops a sharing the caller may not set and saves the rest.
+    def version_attributes_from(version, arguments, problems)
+      attributes = %w[name description wiki_page_title status].each_with_object({}) do |name, out|
+        out[name] = arguments[name].to_s unless arguments[name].nil?
+      end
+      attributes['default_project_version'] = arguments['default_project_version'] unless arguments['default_project_version'].nil?
+      unless arguments['due_date'].nil?
+        attributes['effective_date'] = arguments['due_date'] == 'none' ? '' : iso_date(arguments['due_date'], 'due_date')
+      end
+      unless arguments['sharing'].nil?
+        value = blocked(problems, 'sharing') { version_sharing(version, arguments['sharing']) }
+        attributes['sharing'] = value unless value.nil?
+      end
+      unless arguments['custom_field_values'].blank?
+        value = blocked(problems, 'custom_field_values') { custom_field_values_for(version, arguments['custom_field_values']) }
+        attributes['custom_field_values'] = value unless value.nil?
+      end
+      attributes
+    end
+
+    def version_sharing(version, value)
+      allowed = version.allowed_sharings(user)
+      return value if allowed.include?(value)
+
+      raise ToolError, "#{value.inspect} is not allowed to you here; allowed: #{allowed.join(', ')}"
+    end
+
+    def version_state(version)
+      version = Version.find(version.id)
+      {
+        id: version.id,
+        name: version.name,
+        project_identifier: version.project.identifier,
+        description: version.description,
+        status: version.status,
+        due_date: version.effective_date&.iso8601,
+        sharing: version.sharing,
+        wiki_page_title: version.wiki_page_title,
+        default_project_version: version.default_project_version,
+        custom_fields: shown_custom_fields(version.visible_custom_field_values(user)),
+        created_on: iso(version.created_on),
+        updated_on: iso(version.updated_on),
+        url: absolute_url(:version_url, version)
+      }
+    end
+
+    def fetch_issue_category(id)
+      category = IssueCategory.find_by(id: id.to_i)
+      raise ToolError, "No visible category with id #{id.inspect}" if category.nil? || !readable_in?(category.project, :view_issues)
+
+      category
+    end
+
+    # The assignee an issue of this category gets; core's form offers the
+    # project's assignable users and its API checks nothing.
+    def category_attributes_from(category, arguments)
+      attributes = {}
+      attributes['name'] = arguments['name'].to_s unless arguments['name'].nil?
+      unless arguments['assigned_to'].nil?
+        attributes['assigned_to_id'] = arguments['assigned_to'] == 'none' ? '' : category_assignee_id(category, arguments['assigned_to'])
+      end
+      attributes
+    end
+
+    def category_assignee_id(category, value)
+      id = user_id_from(value, 'assigned_to')
+      return id if category.project.assignable_users.any? { |principal| principal.id == id }
+
+      raise ToolError, "#{id} is not assignable on #{category.project.identifier}"
+    end
+
+    def category_state(category)
+      category = IssueCategory.find(category.id)
+      { id: category.id, name: category.name, project_identifier: category.project.identifier,
+        assigned_to: category.assigned_to && principal_row(category.assigned_to) }
+    end
+
+    def membership_row(member)
+      roles = member.member_roles.select(&:role).map do |member_role|
+        { id: member_role.role.id, name: member_role.role.name, inherited: member_role.inherited_from.present? }
+      end
+      { id: member.id, principal: principal_row(member.principal), roles: roles }
+    end
+
+    def role_row(role)
+      { id: role.id, name: role.name }
+    end
+
     def saved_custom_fields(record, ids)
       values = Array(ids).filter_map do |id|
         record.custom_field_values.detect { |v| v.custom_field_id.to_s == id.to_s }

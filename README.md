@@ -136,6 +136,7 @@ sections.
 | `view_wiki_pages` | View wiki | Wiki |
 | `view_time_entries` | View spent time | Time tracking |
 | `view_news` | View news | News |
+| `view_members` | View project members | Project |
 | `view_checklists` | View checklist | Issue tracking, with redmine_checklists installed |
 | `add_issues` | Add issues | Issue tracking |
 | `edit_issues` | Edit issues | Issue tracking |
@@ -151,6 +152,15 @@ sections.
 | `set_own_issues_private` | Set own issues public or private | Issue tracking |
 | `manage_issue_relations` | Manage issue relations | Issue tracking |
 | `manage_news` | Manage news | News |
+| `add_project` | Create project | Project |
+| `add_subprojects` | Create subprojects | Project |
+| `edit_project` | Edit project | Project |
+| `close_project` | Close / reopen the project | Project |
+| `select_project_publicity` | Set project public or private | Project |
+| `select_project_modules` | Select project modules | Project |
+| `manage_members` | Manage members | Project |
+| `manage_versions` | Manage versions | Project |
+| `manage_categories` | Manage issue categories | Issue tracking |
 | `done_checklists` | Done checklist items | Issue tracking, with redmine_checklists installed |
 | `edit_checklists` | Edit checklist items | Issue tracking, with redmine_checklists installed |
 | `create_tags` | Create tags | Issue tracking, with redmineup_tags installed |
@@ -164,7 +174,8 @@ adding a tool does. Several scopes gate no tool but one parameter, or one part o
 `set_notes_private` for `private_notes: true`, `manage_subtasks` for `parent`, `add_issue_watchers`
 and `delete_issue_watchers` for watchers, `set_issues_private` and `set_own_issues_private` for
 `is_private`, `view_issue_watchers`, `view_private_notes` and `view_checklists` for what `get_issue` includes, `edit_tags`
-and `create_tags` for tags. A permission a tool checks at runtime must be advertised, or no token can
+and `create_tags` for tags, `select_project_publicity` for `is_public`, `select_project_modules` for
+`enabled_modules`, and `manage_members` for `inherit_members` on a project. A permission a tool checks at runtime must be advertised, or no token can
 ever carry it.
 
 Adding a tool with a new permission changes the advertised set, and every user reconnects to get a
@@ -187,10 +198,12 @@ check at runtime (`scopes`), an extension's tools included, dropping the write t
 is read-only and the tools and scopes of plugins that are not installed, intersected with what
 Doorkeeper will accept.
 Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_private_notes`, `view_wiki_pages`,
-`view_time_entries` and `view_news`; with writes on, add `add_issues`, `add_issue_notes`,
+`view_time_entries`, `view_news` and `view_members`; with writes on, add `add_issues`, `add_issue_notes`,
 `edit_issues`, `edit_own_issues`, `edit_own_issue_notes`, `log_time`, `set_notes_private`,
 `manage_subtasks`, `add_issue_watchers`, `delete_issue_watchers`, `set_issues_private`,
-`set_own_issues_private`, `manage_issue_relations` and `manage_news`. With redmine_checklists installed, `view_checklists`
+`set_own_issues_private`, `manage_issue_relations`, `manage_news`, `add_project`, `add_subprojects`,
+`edit_project`, `close_project`, `select_project_publicity`, `select_project_modules`, `manage_members`,
+`manage_versions` and `manage_categories`. With redmine_checklists installed, `view_checklists`
 joins the read-only set and `done_checklists` and `edit_checklists` the write set; with
 redmineup_tags, `create_tags` and `edit_tags` join the write set. The OAuth application in
 Redmine must enable at least these; it may enable more. The same file probes Doorkeeper for PKCE support rather than
@@ -218,10 +231,16 @@ itself is left alone: URLs built from it alone, such as the sudo mode password f
 
 The timing matters: plugin `init.rb` files run in a `to_prepare` block registered before the one in
 which Redmine configures Doorkeeper, and touching a Doorkeeper controller before that configuration
-binds it to `ActionController::Base` for the life of the process. The module is prepended, and puts
-back the recalled controller that the older patch of `config/initializers/30-redmine.rb` strips, so
-an install that still carries that patch keeps working; the patch can be removed at the next
-restart.
+binds it to `ActionController::Base` for the life of the process.
+
+The first versions of this README asked administrators to patch Redmine's
+`config/initializers/30-redmine.rb` by hand to strip the `doorkeeper/` prefix. That patch was never
+part of Redmine: neither 6.1.5, 7.0.2 nor trunk (checked 2026-11-11) carry it, and none of them fix the
+relative controllers either, so the plugin's module is still needed on Redmine 7. The core patch, on
+the other hand, is no longer needed with plugin 0.2.1 or later, and can be removed: revert the file to
+the version Redmine ships, restart, then open the OAuth2 consent screen and click Authorize with sudo
+mode on. Until it is removed, the module puts back the recalled controller the patch strips, so an
+install that still carries it keeps working. Our own instance never carried it.
 
 ## Authentication
 
@@ -361,6 +380,7 @@ while read-only mode is on, which is the default.
 | `list_news`, `get_news` | `view_news`. Filtered by `News.visible`; with a project, that project's own news, as core's index |
 | `list_enumerations` | none. Trackers, statuses, priorities, time entry activities; with `project`, that project's activities and, for a caller with `log_time` there, the time entry custom fields with their required flag and allowed values |
 | `list_users` | none. Filtered by `Principal.visible` |
+| `list_memberships` | `view_members`. Users and groups with their roles, inherited ones marked, as core's `/projects/:id/memberships.json`; with `manage_members`, the roles the caller may give |
 | `list_time_entries` | `view_time_entries`. Totals, per-group hours and each entry's custom fields, filtered by `TimeEntry.visible` |
 | `get_issue_fields` | `view_issues`. What the caller may set on an issue, before a write; with `issue` and `tracker`, what it would be under that tracker, refused as `update_issue` refuses the move |
 | `create_issue` (write) | `add_issues`, on the requested tracker, plus `manage_subtasks` for `parent`, `add_issue_watchers` for `watcher_users`, `set_issues_private` or `set_own_issues_private` for `is_private`, `edit_tags` for `tag_list` and `create_tags` for a tag that does not exist yet |
@@ -373,6 +393,19 @@ while read-only mode is on, which is the default.
 | `log_time` (write) | `log_time`. Always for the authenticated user |
 | `create_news` (write) | `manage_news`. Publishes at once and, when `news_added` is a notified event, emails project members and news watchers; the tool tells the agent to get explicit confirmation first |
 | `update_news` (write) | `manage_news`. Editing sends no email |
+| `create_project` (write) | `add_project` for a root project, `add_subprojects` on the parent for a subproject, plus `select_project_publicity` for `is_public`, `select_project_modules` for `enabled_modules` and `manage_members` for `inherit_members`. A non-administrator becomes a member with the default role, as in core |
+| `update_project` (write) | `edit_project`, plus the per-field permissions of `create_project`, and `add_subprojects` or `add_project` to move it. The identifier cannot be changed |
+| `close_project`, `reopen_project` (write) | `close_project`. Subprojects follow, as in core |
+| `create_version`, `update_version` (write) | `manage_versions`. `sharing` within core's `allowed_sharings`; updating also needs `view_issues`, since the reply returns the version |
+| `create_issue_category`, `update_issue_category` (write) | `manage_categories`, with the issue tracking module on. The default assignee must be assignable on the project, which is stricter than core's API; updating also needs `view_issues` |
+| `update_membership` (write) | `manage_members`. Adds a user or a group, or replaces a member's roles, among the roles the caller may manage; inherited roles are left alone. Removing a member is not possible |
+
+The project structure tools refuse what core would drop in silence, naming the parameter: a field
+the role or the token may not set, a parent the caller may not extend, a `sharing` outside
+`allowed_sharings`, a role outside the caller's managed roles, an unknown module or tracker. A write
+on a closed project says the project is closed, where core's permission check only says no. Nothing
+here deletes: no project, version, category or member can be removed, and archiving needs an
+administrator; see [TODO.md](TODO.md).
 
 `get_issue` respects per-field custom field visibility and filters private notes by role and token scope, as above.
 Its history reads as the issue page's: a custom field by its name, a reference without `_id` (`status`,
