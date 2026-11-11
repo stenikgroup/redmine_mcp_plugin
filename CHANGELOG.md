@@ -7,6 +7,58 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 
 ## [Unreleased]
 
+### Added
+
+- Nine tools for the structure of a project, each mapped to a Redmine permission, which is also its
+  OAuth scope, and to a REST API action of Redmine 7.0: `create_project`, `update_project`,
+  `close_project`, `reopen_project`, `create_version`, `update_version`, `create_issue_category`,
+  `update_issue_category` and `update_membership`, plus `list_memberships` to read the members.
+  They refuse, naming the parameter, what core drops in silence: a field the role or the token may
+  not set, a parent the caller may not extend, a version `sharing` outside `allowed_sharings`, a role
+  outside the caller's managed roles. **Upgrade step:** with writes on, the
+  server now advertises `add_project`, `add_subprojects`, `edit_project`, `close_project`,
+  `select_project_publicity`, `select_project_modules`, `manage_members`, `manage_versions` and
+  `manage_categories`, and `view_members` in read-only mode too; enable them on the MCP application
+  in Administration → Applications, or the next consent fails with `invalid_scope`.
+- `update_time_entry` corrects a time entry, or moves it to another issue or project: the caller's
+  own under `edit_own_time_entries`, anyone's under `edit_time_entries`.
+- `copy_issue` copies an issue, in its project or to another, with core's options (attachments,
+  subtasks, the "copied to" relation) and the field overrides of `create_issue`.
+- `log_time` and `update_time_entry` take `user`, to log time for someone else under
+  `log_time_for_other_users`. `log_time` replies with the entry's `user`.
+- `update_wiki_page` creates or rewrites a wiki page under `edit_wiki_pages`, with core's optimistic
+  lock on `version`. `list_wiki_page_versions` lists a page's history and `get_wiki_page` takes
+  `version`, both under `view_wiki_edits`; `get_wiki_page` also returns `current_version`, `author`,
+  `comments`, `parent_title` and `url`.
+- `list_files` and `add_file` read and feed the Files module, under `view_files` and `manage_files`.
+- `search` is Redmine's search box across issues, news, documents, changesets, wiki pages, forum
+  messages and projects, under `search_project` and each type's own `view_` permission.
+  **Upgrade step:** the server also advertises, read-only mode included, `search_project`,
+  `view_wiki_edits`, `view_files`, `view_documents`, `view_changesets` and `view_messages`, and with
+  writes on `edit_wiki_pages`, `rename_wiki_pages`, `protect_wiki_pages` and `manage_files`; enable
+  them on the MCP application.
+- Nine tools delete: `delete_issue`, `delete_time_entry`, `delete_news`, `delete_wiki_page`,
+  `delete_attachment`, `delete_version`, `delete_issue_category`, `delete_membership` and
+  `delete_project`. No plugin setting gates them: each needs the permission Redmine has for that
+  deletion, and a token without the scope does not list the tool. `delete_issue` and
+  `delete_wiki_page` ask what becomes of logged time and of child pages, as core's forms do, where
+  its API decides silently. **Upgrade step:** with writes on, the server also advertises
+  `delete_issues`, `delete_project`, `delete_wiki_pages` and `delete_wiki_pages_attachments`; tick
+  them on the MCP application only if agents may delete. `manage_versions`, `manage_categories`,
+  `manage_members`, `manage_news` and the `edit_time_entries` pair now also delete.
+- `get_project` returns `inherit_members`.
+- `TODO.md` lists the tools held back: those with no REST API action yet, those that need the
+  `admin` scope, and what is not planned.
+
+### Changed
+
+- `update_issue_note` edits another user's note when the role holds `edit_issue_notes`, as Redmine
+  does. It was refused whatever the role, as a product rule, which is lifted. A token is kept to its
+  owner's notes by leaving `edit_issue_notes` out of its scopes. The reply names the note's `author`.
+  **Upgrade step:** with writes on, the server also advertises `edit_issue_notes`,
+  `edit_time_entries`, `edit_own_time_entries`, `log_time_for_other_users` and `copy_issues`; enable
+  them on the MCP application.
+
 ## [0.3.0] - 2026-11-06
 
 ### Added

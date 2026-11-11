@@ -136,14 +136,34 @@ sections.
 | `view_wiki_pages` | View wiki | Wiki |
 | `view_time_entries` | View spent time | Time tracking |
 | `view_news` | View news | News |
+| `view_members` | View project members | Project |
+| `search_project` | Search projects | Project |
+| `view_wiki_edits` | View wiki history | Wiki |
+| `view_files` | View files | Files |
+| `view_documents` | View documents | Documents - read by `search` only |
+| `view_changesets` | View changesets | Repository - read by `search` only |
+| `view_messages` | View messages | Forums - read by `search` only |
 | `view_checklists` | View checklist | Issue tracking, with redmine_checklists installed |
 | `add_issues` | Add issues | Issue tracking |
 | `edit_issues` | Edit issues | Issue tracking |
 | `edit_own_issues` | Edit own issues | Issue tracking |
 | `add_issue_notes` | Add notes | Issue tracking - **not** the "Add notes" under Contacts |
-| `log_time` | Log spent time | Time tracking - **not** "Log spent time for other users" |
+| `log_time` | Log spent time | Time tracking |
+| `log_time_for_other_users` | Log spent time for other users | Time tracking |
+| `edit_time_entries` | Edit time logs | Time tracking |
+| `edit_own_time_entries` | Edit own time logs | Time tracking |
+| `copy_issues` | Copy issues | Issue tracking |
+| `edit_wiki_pages` | Edit wiki pages | Wiki |
+| `rename_wiki_pages` | Rename wiki pages | Wiki |
+| `protect_wiki_pages` | Protect wiki pages | Wiki |
+| `manage_files` | Manage files | Files |
+| `delete_issues` | Delete issues | Issue tracking |
+| `delete_project` | Delete the project | Project |
+| `delete_wiki_pages` | Delete wiki pages | Wiki |
+| `delete_wiki_pages_attachments` | Delete attachments | Wiki |
 | `set_notes_private` | Set notes as private | Issue tracking |
 | `edit_own_issue_notes` | Edit own notes | Issue tracking |
+| `edit_issue_notes` | Edit notes | Issue tracking |
 | `manage_subtasks` | Manage subtasks | Issue tracking |
 | `add_issue_watchers` | Add watchers | Issue tracking |
 | `delete_issue_watchers` | Delete watchers | Issue tracking |
@@ -151,6 +171,15 @@ sections.
 | `set_own_issues_private` | Set own issues public or private | Issue tracking |
 | `manage_issue_relations` | Manage issue relations | Issue tracking |
 | `manage_news` | Manage news | News |
+| `add_project` | Create project | Project |
+| `add_subprojects` | Create subprojects | Project |
+| `edit_project` | Edit project | Project |
+| `close_project` | Close / reopen the project | Project |
+| `select_project_publicity` | Set project public or private | Project |
+| `select_project_modules` | Select project modules | Project |
+| `manage_members` | Manage members | Project |
+| `manage_versions` | Manage versions | Project |
+| `manage_categories` | Manage issue categories | Issue tracking |
 | `done_checklists` | Done checklist items | Issue tracking, with redmine_checklists installed |
 | `edit_checklists` | Edit checklist items | Issue tracking, with redmine_checklists installed |
 | `create_tags` | Create tags | Issue tracking, with redmineup_tags installed |
@@ -164,7 +193,8 @@ adding a tool does. Several scopes gate no tool but one parameter, or one part o
 `set_notes_private` for `private_notes: true`, `manage_subtasks` for `parent`, `add_issue_watchers`
 and `delete_issue_watchers` for watchers, `set_issues_private` and `set_own_issues_private` for
 `is_private`, `view_issue_watchers`, `view_private_notes` and `view_checklists` for what `get_issue` includes, `edit_tags`
-and `create_tags` for tags. A permission a tool checks at runtime must be advertised, or no token can
+and `create_tags` for tags, `select_project_publicity` for `is_public`, `select_project_modules` for
+`enabled_modules`, and `manage_members` for `inherit_members` on a project. A permission a tool checks at runtime must be advertised, or no token can
 ever carry it.
 
 Adding a tool with a new permission changes the advertised set, and every user reconnects to get a
@@ -187,10 +217,15 @@ check at runtime (`scopes`), an extension's tools included, dropping the write t
 is read-only and the tools and scopes of plugins that are not installed, intersected with what
 Doorkeeper will accept.
 Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_private_notes`, `view_wiki_pages`,
-`view_time_entries` and `view_news`; with writes on, add `add_issues`, `add_issue_notes`,
+`view_time_entries`, `view_news`, `view_members`, `search_project`, `view_wiki_edits`, `view_files`,
+`view_documents`, `view_changesets` and `view_messages`; with writes on, add `add_issues`, `add_issue_notes`,
 `edit_issues`, `edit_own_issues`, `edit_own_issue_notes`, `log_time`, `set_notes_private`,
 `manage_subtasks`, `add_issue_watchers`, `delete_issue_watchers`, `set_issues_private`,
-`set_own_issues_private`, `manage_issue_relations` and `manage_news`. With redmine_checklists installed, `view_checklists`
+`set_own_issues_private`, `manage_issue_relations`, `manage_news`, `add_project`, `add_subprojects`,
+`edit_project`, `close_project`, `select_project_publicity`, `select_project_modules`, `manage_members`,
+`manage_versions`, `manage_categories`, `edit_issue_notes`, `edit_time_entries`, `edit_own_time_entries`,
+`log_time_for_other_users`, `copy_issues`, `edit_wiki_pages`, `rename_wiki_pages`, `protect_wiki_pages`,
+`manage_files`, `delete_issues`, `delete_project`, `delete_wiki_pages` and `delete_wiki_pages_attachments`. With redmine_checklists installed, `view_checklists`
 joins the read-only set and `done_checklists` and `edit_checklists` the write set; with
 redmineup_tags, `create_tags` and `edit_tags` join the write set. The OAuth application in
 Redmine must enable at least these; it may enable more. The same file probes Doorkeeper for PKCE support rather than
@@ -218,10 +253,16 @@ itself is left alone: URLs built from it alone, such as the sudo mode password f
 
 The timing matters: plugin `init.rb` files run in a `to_prepare` block registered before the one in
 which Redmine configures Doorkeeper, and touching a Doorkeeper controller before that configuration
-binds it to `ActionController::Base` for the life of the process. The module is prepended, and puts
-back the recalled controller that the older patch of `config/initializers/30-redmine.rb` strips, so
-an install that still carries that patch keeps working; the patch can be removed at the next
-restart.
+binds it to `ActionController::Base` for the life of the process.
+
+The first versions of this README asked administrators to patch Redmine's
+`config/initializers/30-redmine.rb` by hand to strip the `doorkeeper/` prefix. That patch was never
+part of Redmine: neither 6.1.5, 7.0.2 nor trunk (checked 2026-11-11) carry it, and none of them fix the
+relative controllers either, so the plugin's module is still needed on Redmine 7. The core patch, on
+the other hand, is no longer needed with plugin 0.2.1 or later, and can be removed: revert the file to
+the version Redmine ships, restart, then open the OAuth2 consent screen and click Authorize with sudo
+mode on. Until it is removed, the module puts back the recalled controller the patch strips, so an
+install that still carries it keeps working. Our own instance never carried it.
 
 ## Authentication
 
@@ -333,17 +374,21 @@ Writing one is the other way round: `add_issue_note` and `update_issue_note` wit
 check `set_notes_private` through the scope-aware `allowed_to?`, which is why that permission is
 advertised as a scope once writes are on.
 
-### Own notes only
+### Notes and time of other users
 
-One deliberate exception to "roles are the boundary": `update_issue_note` edits only notes the caller
-wrote, even when their role holds `edit_issue_notes`, which in Redmine also allows editing other
-people's notes. This is a product requirement, and the refusal names it ("You can only edit your own
-notes") rather than using the permission wording, because the cause is our rule, not a Redmine
-permission. Everything else is core's: the journal is found through `Journal.visible`, the right
-through `Journal#editable_by?`, and a note saved blank is refused because Redmine would delete it.
-The tool is gated on `edit_own_issue_notes` and only that scope is advertised, so Redmine itself
-refuses other people's notes and our check is a second guard. A role with "Edit notes" but without
-"Edit own notes" will not see the tool; the remedy is to tick "Edit own notes" on that role.
+`update_issue_note` and `update_time_entry` follow core's pair of permissions: `edit_own_issue_notes`
+or `edit_own_time_entries` for what the caller wrote or logged, `edit_issue_notes` or
+`edit_time_entries` for anyone's. Up to 0.3.0 `update_issue_note` refused other people's notes
+whatever the role; that rule is lifted, and a token is kept to its owner's notes and time by leaving
+`edit_issue_notes` and `edit_time_entries` out of its scopes. The refusal then names the missing
+permission. The journal is found through `Journal.visible`, the right through
+`Journal#editable_by?` and `TimeEntry#editable_by?`, and a note saved blank is refused because
+Redmine would delete it. Both tools tell the agent to say whose note or entry it is and to get
+confirmation before changing someone else's.
+
+`log_time` and `update_time_entry` take `user`. Anyone but the caller needs
+`log_time_for_other_users` and must be able to log time on the project, the two causes core reports
+alike as "User is invalid".
 
 ## Tools
 
@@ -357,22 +402,74 @@ while read-only mode is on, which is the default.
 | `search_issues`, `get_issue` | `view_issues`. `get_issue` adds the attachments, the subtasks the caller can see, the relations whose other issue the caller can see, the watchers under `view_issue_watchers`, the checklist under `view_checklists`, and the tags |
 | `get_attachment` | `view_issues`, through core's `Attachment#visible?`. Metadata, and the content of a text file within `file_max_size_displayed` |
 | `list_queries` | `view_issues`. Saved queries, filtered by `IssueQuery.visible` |
-| `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
+| `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages`. `get_wiki_page` with `version` reads an earlier version, under `view_wiki_edits` as in core |
+| `list_wiki_page_versions` | `view_wiki_edits`. The page's history, newest first, without the text |
+| `list_files` | `view_files`, with the Files module on. The project's files and those of its versions, as core's `/projects/:id/files.json` |
+| `search` | `search_project`. Core's search box: issues, news, documents, changesets, wiki pages, forum messages and projects, each only under its own `view_` permission |
 | `list_news`, `get_news` | `view_news`. Filtered by `News.visible`; with a project, that project's own news, as core's index |
 | `list_enumerations` | none. Trackers, statuses, priorities, time entry activities; with `project`, that project's activities and, for a caller with `log_time` there, the time entry custom fields with their required flag and allowed values |
 | `list_users` | none. Filtered by `Principal.visible` |
+| `list_memberships` | `view_members`. Users and groups with their roles, inherited ones marked, as core's `/projects/:id/memberships.json`; with `manage_members`, the roles the caller may give |
 | `list_time_entries` | `view_time_entries`. Totals, per-group hours and each entry's custom fields, filtered by `TimeEntry.visible` |
 | `get_issue_fields` | `view_issues`. What the caller may set on an issue, before a write; with `issue` and `tracker`, what it would be under that tracker, refused as `update_issue` refuses the move |
 | `create_issue` (write) | `add_issues`, on the requested tracker, plus `manage_subtasks` for `parent`, `add_issue_watchers` for `watcher_users`, `set_issues_private` or `set_own_issues_private` for `is_private`, `edit_tags` for `tag_list` and `create_tags` for a tag that does not exist yet |
 | `update_issue` (write) | `edit_issues`, or `edit_own_issues` on one's own issue, on the issue's tracker, plus the per-field permissions of `create_issue` and `delete_issue_watchers` for `remove_watcher_users`. Watching or unwatching oneself needs none, as core's Watch link |
 | `add_issue_note` (write) | `add_issue_notes`, on the issue's tracker, plus `set_notes_private` for private notes |
-| `update_issue_note` (write) | `edit_own_issue_notes`; only notes the caller wrote, plus `set_notes_private` to change privacy |
+| `update_issue_note` (write) | `edit_own_issue_notes` for a note the caller wrote, `edit_issue_notes` for anyone's, plus `set_notes_private` to change privacy |
 | `add_issue_attachment` (write) | `edit_issues`, `edit_own_issues` or `add_issue_notes`, as core's `attachments_addable?`. A text file within `attachment_max_size` and the extension lists; saved with a journal, so watchers are mailed as for an issue update |
 | `update_issue_checklists` (write) | `edit_checklists` to add or rename, `done_checklists` or `edit_checklists` to tick or untick. Present only with redmine_checklists |
 | `update_issue_relations` (write) | `manage_issue_relations` on the issue's project, as core's relation form. Every relation type core has |
-| `log_time` (write) | `log_time`. Always for the authenticated user |
+| `log_time` (write) | `log_time`, plus `log_time_for_other_users` when `user` names someone else |
+| `update_time_entry` (write) | `edit_own_time_entries` for the caller's own entry, `edit_time_entries` for anyone's, plus `view_time_entries` to read it and `log_time_for_other_users` to change whose it is. `issue` or `project` moves the entry, under `log_time` on the issue's project as in core |
+| `copy_issue` (write) | `copy_issues` on the source project and `add_issues` on the target's tracker, plus the per-field permissions of `create_issue`. Copies the fields, custom fields, parent and attachments, the watchers under `add_issue_watchers`, the subtasks on request, and links the copy as core does |
 | `create_news` (write) | `manage_news`. Publishes at once and, when `news_added` is a notified event, emails project members and news watchers; the tool tells the agent to get explicit confirmation first |
 | `update_news` (write) | `manage_news`. Editing sends no email |
+| `update_wiki_page` (write) | `edit_wiki_pages`. Creates the page or replaces its text, keeping the history; `version` refuses an edit made meanwhile, as core's 409. A protected page needs `protect_wiki_pages`, and `parent_title` on an existing page `rename_wiki_pages`. Watchers are mailed as for an edit in the browser |
+| `add_file` (write) | `manage_files`, with the Files module on. A text file, on the project or on one of its versions; mails members when `file_added` is a notified event, as core |
+| `delete_issue` (write) | `delete_issues`, on the issue's tracker. Subtasks go with it. With time logged, `time_entries` must say `destroy`, `nullify` or `reassign`, as core's form asks |
+| `delete_time_entry` (write) | `edit_own_time_entries` for the caller's own entry, `edit_time_entries` for anyone's, as core |
+| `delete_news` (write) | `manage_news` |
+| `delete_wiki_page` (write) | `delete_wiki_pages`, plus `protect_wiki_pages` for a protected page. With child pages, `children` must say `nullify`, `destroy` or `reassign`, as core's form asks |
+| `delete_attachment` (write) | The container's rule, as core's `Attachment#deletable?`: `edit_issues` or `edit_own_issues` on an issue, where the removal is journaled, `manage_files` on a project or a version, `delete_wiki_pages_attachments` on a wiki page |
+| `delete_version` (write) | `manage_versions`. Refused, with the cause, for a version that issues target, that has files, or that a custom field refers to, as core's `Version#deletable?` |
+| `delete_issue_category` (write) | `manage_categories`. Its issues lose the category or take `reassign_to` |
+| `delete_membership` (write) | `manage_members`. Refused for an inherited role or a role outside the caller's managed roles, as core's `Member#deletable?` |
+| `delete_project` (write) | `delete_project`, and an administrator when the project has subprojects, as core's `Project#deletable?`. `confirm` repeats the identifier, as the web form. Core deletes in a background job and mails the user |
+| `create_project` (write) | `add_project` for a root project, `add_subprojects` on the parent for a subproject, plus `select_project_publicity` for `is_public`, `select_project_modules` for `enabled_modules` and `manage_members` for `inherit_members`. A non-administrator becomes a member with the default role, as in core |
+| `update_project` (write) | `edit_project`, plus the per-field permissions of `create_project`, and `add_subprojects` or `add_project` to move it. The identifier cannot be changed |
+| `close_project`, `reopen_project` (write) | `close_project`. Subprojects follow, as in core |
+| `create_version`, `update_version` (write) | `manage_versions`. `sharing` within core's `allowed_sharings`. The saved version is read back only under `view_issues`; without it the write is acknowledged by id |
+| `create_issue_category`, `update_issue_category` (write) | `manage_categories`, with the issue tracking module on. The default assignee is any user or group, as core's API. Read back only under `view_issues` |
+| `update_membership` (write) | `manage_members`. Adds any user or group, or replaces a member's roles, among the roles the caller may manage; inherited roles are left alone |
+
+These tools add no rule of their own to Redmine's: a tool does what its permission allows in core,
+and an administrator who does not want one leaves its scope off the OAuth application.
+
+The project structure tools refuse what core would drop in silence, naming the parameter: a field
+the role or the token may not set, a parent the caller may not extend, a `sharing` outside
+`allowed_sharings`, a role outside the caller's managed roles, an unknown module or tracker. A write
+on a closed project says the project is closed, where core's permission check only says no. Archiving a project needs
+an administrator; see [TODO.md](TODO.md).
+
+### Deleting
+
+Nine tools delete, and no plugin setting switches them on or off. Each is gated on the permission
+Redmine has for that deletion, which is also its OAuth scope: an administrator who does not want
+agents to delete leaves `delete_issues`, `delete_project`, `delete_wiki_pages` and
+`delete_wiki_pages_attachments` unticked on the OAuth application, and a token without the scope
+does not even list the tool. Five deletions share the scope of the matching edit, because Redmine
+grants them together: a version with `manage_versions`, a category with `manage_categories`, a
+member with `manage_members`, a news item with `manage_news`, a time entry with the two
+`edit_time_entries` permissions. Read-only mode, which is the default, hides all of them.
+
+Where core's web form asks a question and its API answers it silently, the tool asks: what becomes
+of the time logged on a deleted issue, and of the child pages of a deleted wiki page. Every one is
+annotated destructive and tells the agent to get explicit confirmation first.
+
+`search` runs core's own fetcher. Core keeps, for one project, the types the user may view there; its
+queries then go through `.visible` scopes, which read roles and not a token's scopes, so the tool
+also leaves out every type whose `view_` scope the token lacks. `searched_types` says what was
+searched. An excerpt is cut at 500 characters.
 
 `get_issue` respects per-field custom field visibility and filters private notes by role and token scope, as above.
 Its history reads as the issue page's: a custom field by its name, a reference without `_id` (`status`,

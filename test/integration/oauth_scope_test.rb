@@ -110,4 +110,15 @@ class OauthScopeTest < Redmine::IntegrationTest
     get '/.well-known/oauth-protected-resource'
     assert_includes JSON.parse(response.body)['scopes_supported'], 'view_private_notes'
   end
+
+  # A scope no document advertises is one no token can carry.
+  def test_project_structure_scopes_are_advertised_with_writes_on
+    Setting.plugin_redmine_mcp_plugin = Setting.plugin_redmine_mcp_plugin.to_h.merge('read_only' => '0')
+    get '/.well-known/oauth-protected-resource'
+    scopes = JSON.parse(response.body)['scopes_supported']
+    %w[add_project add_subprojects edit_project close_project select_project_modules select_project_publicity
+       manage_versions manage_categories view_members manage_members].each do |scope|
+      assert_includes scopes, scope
+    end
+  end
 end

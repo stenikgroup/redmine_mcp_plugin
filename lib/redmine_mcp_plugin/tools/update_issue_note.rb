@@ -4,10 +4,12 @@ module RedmineMcpPlugin
   module Tools
     class UpdateIssueNote < Tool
       tool 'update_issue_note',
-           title: 'Edit own issue note',
-           description: 'Edit a note you wrote on an issue, by the journal id from get_issue or the ' \
-                        'journal_id a write returned. Your own notes only. End with the url.',
-           permission: :edit_own_issue_notes,
+           title: 'Edit issue note',
+           description: 'Edit a note on an issue, by the journal id from get_issue or the journal_id a ' \
+                        'write returned. Your own notes, or anyone\'s where your role may edit notes; say ' \
+                        'whose note it is and get explicit confirmation before editing someone else\'s. ' \
+                        'End with the url.',
+           permission: %i[edit_issue_notes edit_own_issue_notes],
            scopes: %i[set_notes_private],
            rendered: %w[notes],
            checks_blank: %w[notes],
@@ -29,10 +31,12 @@ module RedmineMcpPlugin
 
       def perform(arguments)
         journal = fetch_journal(arguments['journal'])
-        # Our rule, not Redmine's: a role with edit_issue_notes may edit anyone's notes in core.
-        raise ToolError, 'You can only edit your own notes' unless journal.user_id == user.id
         raise ToolError, 'This journal has no note to edit; it records field changes only' if journal.notes.blank?
-        raise ToolError, 'You do not have permission to do that' unless journal.editable_by?(user)
+        # Core's rule: edit_issue_notes for anyone's note, edit_own_issue_notes for one's own.
+        unless journal.editable_by?(user)
+          own = journal.user_id == user.id
+          raise ToolError, own ? 'You do not have permission to do that' : "Editing another user's note needs #{permission_labels(:edit_issue_notes)}"
+        end
         # Core deletes a journal left with no note and no field changes, so an edit must never blank it.
         raise ToolError, 'notes must not be empty: Redmine deletes a note saved blank' if arguments['notes'].to_s.strip.empty?
 
@@ -62,6 +66,7 @@ module RedmineMcpPlugin
         {
           journal_id: journal.id,
           issue_id: issue.id,
+          author: journal.user&.name,
           notes: journal.notes,
           private_notes: journal.private_notes?,
           updated_on: iso(journal.updated_on),

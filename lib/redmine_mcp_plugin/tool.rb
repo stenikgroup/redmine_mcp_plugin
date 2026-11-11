@@ -291,6 +291,21 @@ module RedmineMcpPlugin
       wiki
     end
 
+    # The wiki for a tool that needs `permission` and not view_wiki_pages, as
+    # core's own actions: editing or reading the history is granted apart.
+    def wiki_for(project, permission)
+      require_module!(project, :wiki)
+      authorize!(permission, project)
+      project.wiki || raise(ToolError, "Project #{project.identifier} has no wiki")
+    end
+
+    def fetch_wiki_page(wiki, title)
+      page = wiki.find_page(title.to_s)
+      raise ToolError, "No wiki page titled #{title.inspect}" if page.nil?
+
+      page
+    end
+
     # People are named by id or "me" everywhere. Query filters pass "me" on to
     # core, which also adds the user's groups; writes resolve it here.
     def user_ref!(value, name)
@@ -947,6 +962,292 @@ module RedmineMcpPlugin
         comments_count: news.comments_count,
         url: absolute_url(:news_url, news)
       }
+    end
+
+    # --- time entries ---------------------------------------------------------
+
+    # Activities are per project; one from the global list fails validation.
+    def time_entry_activity(project, name)
+      activity = project.activities.find_by(name: name.to_s)
+      raise ToolError, "Project #{project.identifier} has no activity named #{name.inspect}" if activity.nil?
+
+      activity
+    end
+
+    # Whose time it is. Core answers "User is invalid" for both causes: the
+    # permission to log for someone else, and a user who may not log time here.
+    def time_entry_user_id(entry, value)
+      id = user_id_from(value, 'user')
+      return id if id == entry.user_id || id == user.id
+
+      unless user.allowed_to?(:log_time_for_other_users, entry.project)
+        raise ToolError, "Logging time for another user needs #{permission_labels(:log_time_for_other_users)}"
+      end
+      return id if entry.assignable_users.any? { |candidate| candidate.id == id }
+
+      raise ToolError, "User #{id} may not log time on #{entry.project.identifier}"
+    end
+
+    def time_entry_state(entry, ids)
+      state = {
+        id: entry.id,
+        user: entry.user && { id: entry.user_id, name: entry.user.name },
+        hours: entry.hours.to_f,
+        activity: entry.activity&.name,
+        spent_on: entry.spent_on&.iso8601,
+        comments: entry.comments,
+        issue_id: entry.issue_id,
+        project_identifier: entry.project&.identifier,
+        url: entry.issue ? absolute_url(:issue_url, entry.issue) : absolute_url(:project_time_entries_url, entry.project)
+      }
+      # No key when none were sent: an empty list reads as "no custom fields".
+      state[:custom_fields] = saved_custom_fields(entry, ids) if ids.any?
+      state
+    end
+
+    # --- project structure: projects, versions, categories, members -----------
+
+    # allowed_to? is false for every write on a closed project, which would read
+    # as a permissions problem; name the real cause, as require_module! does.
+    # get_project already returns the status to anyone who can see the project.
+    def authorize_open!(permission, project)
+      raise ToolError, "Project #{project.identifier} is closed; reopen it first" if project.closed?
+
+      authorize!(permission, project)
+    end
+
+    def save_or_refuse!(record, act)
+      return if record.save
+
+      raise ToolError, "Could not #{act}: #{record.errors.full_messages.join('; ')}"
+    end
+
+    # parameter => core attribute, for the values that need no resolver.
+    PROJECT_ATTRIBUTES = { 'name' => 'name', 'identifier' => 'identifier', 'description' => 'description',
+                           'homepage' => 'homepage', 'is_public' => 'is_public',
+                           'inherit_members' => 'inherit_members' }.freeze
+    # Core gates these three on a permission and drops them silently without it.
+    PROJECT_GATED = { 'is_public' => :select_project_publicity, 'enabled_module_names' => :select_project_modules,
+                      'inherit_members' => :manage_members }.freeze
+    PROJECT_PARAMETERS = PROJECT_ATTRIBUTES.invert.merge('parent_id' => 'parent', 'enabled_module_names' => 'enabled_modules',
+                                                         'tracker_ids' => 'trackers',
+                                                         'custom_field_values' => 'custom_field_values').freeze
+
+    # The attributes to assign to a project. Every check runs and each refusal
+    # is charged to its parameter, as for an issue.
+    def project_attributes_from(project, arguments, problems)
+      attributes = PROJECT_ATTRIBUTES.each_with_object({}) do |(name, attribute), out|
+        out[attribute] = arguments[name] unless arguments[name].nil?
+      end
+      resolvers = { 'parent_id'            => ['parent', ->(value) { project_parent_id(project, value) }],
+                    'enabled_module_names' => ['enabled_modules', ->(value) { project_module_names(value) }],
+                    'tracker_ids'          => ['trackers', ->(value) { project_tracker_ids(value) }],
+                    'custom_field_values'  => ['custom_field_values', ->(value) { custom_field_values_for(project, value) }] }
+      resolvers.each do |attribute, (name, resolve)|
+        next if arguments[name].nil? || arguments[name] == {}
+
+        value = blocked(problems, name) { resolve.call(arguments[name]) }
+        attributes[attribute] = value unless value.nil?
+      end
+      attributes.keys.each do |attribute|
+        next if project.safe_attribute?(attribute, user)
+
+        problems << project_blocked_name(attribute)
+        attributes.delete(attribute)
+      end
+      attributes
+    end
+
+    def project_blocked_name(attribute)
+      name = PROJECT_PARAMETERS.fetch(attribute, attribute)
+      gate = PROJECT_GATED[attribute]
+      gate ? "#{name} (needs #{permission_labels(gate)})" : name
+    end
+
+    # Core's own rule: a subproject needs add_subprojects on the parent, a root
+    # project add_project, and core answers either refusal "Parent is invalid".
+    def project_parent_id(project, value)
+      parent = value.to_s == 'none' ? nil : fetch_project(value)
+      return parent&.id.to_s if !project.new_record? && parent&.id == project.parent_id
+
+      unless project.allowed_parents(user).include?(parent)
+        cause = parent ? "#{permission_labels(:add_subprojects)} on #{parent.identifier}" : permission_labels(:add_project)
+        raise ToolError, "needs #{cause}"
+      end
+      raise ToolError, "#{parent.identifier} is closed" if parent && !parent.active?
+
+      parent&.id.to_s
+    end
+
+    def project_module_names(values)
+      known   = Redmine::AccessControl.available_project_modules.map(&:to_s)
+      names   = Array(values).map(&:to_s)
+      unknown = names - known
+      raise ToolError, "no module #{unknown.join(', ')}; modules: #{known.sort.join(', ')}" if unknown.any?
+
+      names
+    end
+
+    def project_tracker_ids(values)
+      trackers = Tracker.sorted.to_a
+      Array(values).map do |value|
+        tracker = trackers.detect { |t| t.name == value.to_s || t.id.to_s == value.to_s }
+        raise ToolError, "no tracker #{value.inspect}; trackers: #{trackers.map(&:name).join(', ')}" if tracker.nil?
+
+        tracker.id
+      end
+    end
+
+    def project_state(project)
+      {
+        id: project.id,
+        identifier: project.identifier,
+        name: project.name,
+        description: project.description,
+        homepage: project.homepage,
+        status: project.status,
+        is_public: project.is_public?,
+        parent_id: project.parent_id,
+        inherit_members: project.inherit_members?,
+        created_on: iso(project.created_on),
+        updated_on: iso(project.updated_on),
+        enabled_modules: project.enabled_module_names.sort,
+        trackers: project.trackers.map { |t| { id: t.id, name: t.name } },
+        # Categories and versions are cheap and are what a model needs before
+        # it can create or filter an issue sensibly.
+        issue_categories: project.issue_categories.map { |c| { id: c.id, name: c.name } },
+        versions: project.shared_versions.map { |v| { id: v.id, name: v.name, status: v.status } },
+        # Core's own rule, which honours the roles a field is restricted to.
+        custom_fields: shown_custom_fields(project.visible_custom_field_values(user))
+      }
+    end
+
+    def saved_project_state(project)
+      project_state(Project.find(project.id)).merge(url: absolute_url(:project_url, project))
+    end
+
+    # The same message whether it does not exist or its project may not be
+    # seen. The caller adds authorize! for its permission.
+    def fetch_version(id)
+      version = Version.find_by(id: id.to_i)
+      raise ToolError, "No visible version with id #{id.inspect}" if version.nil? || !version.project.visible?(user)
+
+      version
+    end
+
+    # Core's update answers with no body, so a write needs no read permission;
+    # the saved record is returned only to a caller who may read it, and
+    # otherwise the write is acknowledged by id.
+    def readable_in?(project, permission)
+      project.visible?(user) && user.allowed_to?(permission, project)
+    end
+
+    # Project.visible is SQL built on roles and ignores OAuth scopes;
+    # Project#visible? goes through allowed_to?(:view_project).
+    def fetch_readable_project(identifier)
+      project = fetch_project(identifier)
+      raise ToolError, "No visible project matching #{identifier.inspect}" unless project.visible?(user)
+
+      project
+    end
+
+    # Core drops a sharing the caller may not set and saves the rest.
+    def version_attributes_from(version, arguments, problems)
+      attributes = %w[name description wiki_page_title status].each_with_object({}) do |name, out|
+        out[name] = arguments[name].to_s unless arguments[name].nil?
+      end
+      attributes['default_project_version'] = arguments['default_project_version'] unless arguments['default_project_version'].nil?
+      unless arguments['due_date'].nil?
+        attributes['effective_date'] = arguments['due_date'] == 'none' ? '' : iso_date(arguments['due_date'], 'due_date')
+      end
+      unless arguments['sharing'].nil?
+        value = blocked(problems, 'sharing') { version_sharing(version, arguments['sharing']) }
+        attributes['sharing'] = value unless value.nil?
+      end
+      unless arguments['custom_field_values'].blank?
+        value = blocked(problems, 'custom_field_values') { custom_field_values_for(version, arguments['custom_field_values']) }
+        attributes['custom_field_values'] = value unless value.nil?
+      end
+      attributes
+    end
+
+    def version_sharing(version, value)
+      allowed = version.allowed_sharings(user)
+      return value if allowed.include?(value)
+
+      raise ToolError, "#{value.inspect} is not allowed to you here; allowed: #{allowed.join(', ')}"
+    end
+
+    def version_state(version)
+      version = Version.find(version.id)
+      return written_unread(version, :version_url) unless readable_in?(version.project, :view_issues)
+
+      {
+        id: version.id,
+        name: version.name,
+        project_identifier: version.project.identifier,
+        description: version.description,
+        status: version.status,
+        due_date: version.effective_date&.iso8601,
+        sharing: version.sharing,
+        wiki_page_title: version.wiki_page_title,
+        default_project_version: version.default_project_version,
+        custom_fields: shown_custom_fields(version.visible_custom_field_values(user)),
+        created_on: iso(version.created_on),
+        updated_on: iso(version.updated_on),
+        url: absolute_url(:version_url, version)
+      }
+    end
+
+    def fetch_issue_category(id)
+      category = IssueCategory.find_by(id: id.to_i)
+      raise ToolError, "No visible category with id #{id.inspect}" if category.nil? || !category.project.visible?(user)
+
+      category
+    end
+
+    # The assignee an issue of this category gets. Core's API takes any id; only
+    # one that names nobody is refused here, where core would store it.
+    def category_attributes_from(category, arguments)
+      attributes = {}
+      attributes['name'] = arguments['name'].to_s unless arguments['name'].nil?
+      unless arguments['assigned_to'].nil?
+        attributes['assigned_to_id'] = arguments['assigned_to'] == 'none' ? '' : category_assignee_id(category, arguments['assigned_to'])
+      end
+      attributes
+    end
+
+    def category_assignee_id(category, value)
+      id = user_id_from(value, 'assigned_to')
+      return id if Principal.where(type: %w[User Group]).exists?(id: id)
+
+      raise ToolError, "No user or group with id #{id}"
+    end
+
+    def category_state(category)
+      category = IssueCategory.find(category.id)
+      return written_unread(category) unless readable_in?(category.project, :view_issues)
+
+      { id: category.id, name: category.name, project_identifier: category.project.identifier,
+        assigned_to: category.assigned_to && principal_row(category.assigned_to) }
+    end
+
+    def written_unread(record, url_helper = nil)
+      state = { id: record.id, project_identifier: record.project.identifier,
+                note: "Saved. Reading it back needs #{permission_labels(:view_issues)}." }
+      state[:url] = absolute_url(url_helper, record) if url_helper
+      state
+    end
+
+    def membership_row(member)
+      roles = member.member_roles.select(&:role).map do |member_role|
+        { id: member_role.role.id, name: member_role.role.name, inherited: member_role.inherited_from.present? }
+      end
+      { id: member.id, principal: principal_row(member.principal), roles: roles }
+    end
+
+    def role_row(role)
+      { id: role.id, name: role.name }
     end
 
     def saved_custom_fields(record, ids)

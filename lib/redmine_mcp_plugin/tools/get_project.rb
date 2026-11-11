@@ -21,27 +21,7 @@ module RedmineMcpPlugin
       private
 
       def perform(arguments)
-        project = fetch_project(arguments['project'])
-        {
-          id: project.id,
-          identifier: project.identifier,
-          name: project.name,
-          description: project.description,
-          homepage: project.homepage,
-          status: project.status,
-          is_public: project.is_public?,
-          parent_id: project.parent_id,
-          created_on: iso(project.created_on),
-          updated_on: iso(project.updated_on),
-          enabled_modules: project.enabled_module_names.sort,
-          trackers: project.trackers.map { |t| { id: t.id, name: t.name } },
-          # Categories and versions are cheap and are what a model needs before
-          # it can create or filter an issue sensibly.
-          issue_categories: project.issue_categories.map { |c| { id: c.id, name: c.name } },
-          versions: project.shared_versions.map { |v| { id: v.id, name: v.name, status: v.status } },
-          # Core's own rule, which honours the roles a field is restricted to.
-          custom_fields: shown_custom_fields(project.visible_custom_field_values(user))
-        }
+        project_state(fetch_project(arguments['project']))
       end
     end
   end

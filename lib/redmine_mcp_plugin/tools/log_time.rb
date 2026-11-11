@@ -5,13 +5,13 @@ module RedmineMcpPlugin
     class LogTime < Tool
       tool 'log_time',
            title: 'Log spent time',
-           description: 'Log spent time on an issue, or on a project when there is no issue. Time is ' \
-                        'always logged for the authenticated user and cannot be logged for anyone ' \
-                        'else. Call list_enumerations with the project first: activities differ per ' \
+           description: 'Log spent time on an issue, or on a project when there is no issue, for the ' \
+                        'authenticated user unless user names someone else. Call list_enumerations with the project first: activities differ per ' \
                         'project, and it lists the custom fields a time entry needs there, with the ' \
                         'required ones and their allowed values. If refused, tell the user and ask ' \
                         'rather than guess. End with the url.',
            permission: :log_time,
+           scopes: %i[log_time_for_other_users],
            plain: %w[comments],
            write: true,
            schema: {
@@ -25,6 +25,9 @@ module RedmineMcpPlugin
                                'description' => 'Activity name, from list_enumerations for this project.' },
                'spent_on' => { 'type' => 'string', 'description' => 'ISO-8601 date. Defaults to today.' },
                'comments' => { 'type' => 'string', 'description' => 'What the time was spent on.' },
+               'user' => { 'type' => %w[integer string],
+                           'description' => 'User id from list_users, or "me" (the default). Someone else needs the ' \
+                                            'permission to log time for other users.' },
                'custom_field_values' => { 'type' => 'object',
                                          'description' => 'By field id from list_enumerations with the project; ' \
                                                           'a value, or its label when it names one value.' }
@@ -46,27 +49,20 @@ module RedmineMcpPlugin
                               spent_on: spent_on(arguments))
         entry.safe_attributes = attributes_from(entry, arguments, project)
         require_custom_fields!(entry)
-        raise ToolError, "Could not log time: #{entry.errors.full_messages.join('; ')}" unless entry.save
+        save_or_refuse!(entry, 'log time')
 
-        entry_state(entry, custom_field_ids(arguments))
+        time_entry_state(entry, custom_field_ids(arguments))
       end
 
       def attributes_from(entry, arguments, project)
-        attributes = { 'hours' => arguments['hours'], 'activity_id' => activity_for(project, arguments['activity']).id }
+        attributes = { 'hours' => arguments['hours'], 'activity_id' => time_entry_activity(project, arguments['activity']).id }
         attributes['comments'] = arguments['comments'].to_s if arguments.key?('comments')
+        attributes['user_id']  = time_entry_user_id(entry, arguments['user']) unless arguments['user'].nil?
 
         values = custom_field_values_for(entry, arguments['custom_field_values'])
         attributes['custom_field_values'] = values if values
 
         attributes
-      end
-
-      # Activities are per project; one from the global list fails validation.
-      def activity_for(project, name)
-        activity = project.activities.find_by(name: name.to_s)
-        raise ToolError, "Project #{project.identifier} has no activity named #{name.inspect}" if activity.nil?
-
-        activity
       end
 
       def spent_on(arguments)
@@ -76,22 +72,6 @@ module RedmineMcpPlugin
         Date.iso8601(date.to_s)
       rescue ArgumentError
         raise ToolError, "spent_on must be an ISO-8601 date, got #{date.inspect}"
-      end
-
-      def entry_state(entry, ids)
-        state = {
-          id: entry.id,
-          hours: entry.hours.to_f,
-          activity: entry.activity&.name,
-          spent_on: entry.spent_on&.iso8601,
-          comments: entry.comments,
-          issue_id: entry.issue_id,
-          project_identifier: entry.project&.identifier,
-          url: entry.issue ? absolute_url(:issue_url, entry.issue) : absolute_url(:project_time_entries_url, entry.project)
-        }
-        # No key when none were sent: an empty list reads as "no custom fields".
-        state[:custom_fields] = saved_custom_fields(entry, ids) if ids.any?
-        state
       end
     end
   end

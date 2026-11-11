@@ -3,6 +3,8 @@
 require File.expand_path('../test_helper', __dir__)
 
 class McpControllerTest < Redmine::ControllerTest
+  include McpTestHelper
+
   tests McpController
   fixtures :projects, :users, :email_addresses, :roles, :members, :member_roles,
            :issues, :issue_statuses, :trackers, :enumerations, :enabled_modules, :watchers,
@@ -19,33 +21,6 @@ class McpControllerTest < Redmine::ControllerTest
   def teardown
     Setting.clear_cache
     User.current = nil
-  end
-
-  def enable_mcp(overrides = {})
-    Setting.plugin_redmine_mcp_plugin =
-      RedmineMcpPlugin::Settings::DEFAULTS.merge('enabled' => '1').merge(overrides)
-    Setting.clear_cache
-  end
-
-  def rpc(method, params = nil, id: 1)
-    body = { jsonrpc: '2.0', id: id, method: method }
-    body[:params] = params if params
-    body.to_json
-  end
-
-  # ActionController::TestCase#process takes no headers keyword, on any Rails:
-  # request headers are set on @request before the call.
-  def post_mcp(payload, headers = {})
-    headers.each { |name, value| @request.headers[name] = value }
-    post :handle, body: payload, as: :json
-  end
-
-  def json_body
-    JSON.parse(response.body)
-  end
-
-  def api_key_headers(user)
-    { 'X-Redmine-API-Key' => user.api_key }
   end
 
   # --- endpoint gating ---------------------------------------------------
@@ -316,11 +291,6 @@ class McpControllerTest < Redmine::ControllerTest
     assert ids.any?, 'a manager should be offered at least one watcher'
     assert_empty ids & issue.watcher_user_ids, 'current watchers must not be offered again'
     assert_empty ids - issue.project.principals.pluck(:id), 'only project members may watch'
-  end
-
-  def call_tool(name, arguments, user = User.find(2))
-    post_mcp rpc('tools/call', { 'name' => name, 'arguments' => arguments }), api_key_headers(user)
-    json_body['result']
   end
 
   # --- custom field values --------------------------------------------------
