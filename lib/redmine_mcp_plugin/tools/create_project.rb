@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class CreateProject < Tool
+      include ProjectStructure
+
       tool 'create_project',
            title: 'Create project',
            description: 'Create a project, or a subproject with parent. What is left out takes the instance ' \

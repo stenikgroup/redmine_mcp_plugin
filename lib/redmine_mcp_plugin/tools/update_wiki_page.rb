@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateWikiPage < Tool
+      include WikiPages
+
       tool 'update_wiki_page',
            title: 'Create or update a wiki page',
            description: 'Write a wiki page: creates it when the title is new, otherwise replaces its whole ' \

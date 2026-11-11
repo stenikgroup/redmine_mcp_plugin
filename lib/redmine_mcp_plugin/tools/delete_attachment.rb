@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class DeleteAttachment < Tool
+      include Issues
+
       tool 'delete_attachment',
            title: 'Delete attachment',
            description: 'Delete an attachment for good: a file of an issue, a wiki page, a project or a ' \

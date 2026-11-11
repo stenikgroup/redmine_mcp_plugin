@@ -3,13 +3,17 @@
 module RedmineMcpPlugin
   module Tools
     class GetIssue < Tool
+      include Checklists
+      include Tags
+      include Issues
+
       tool 'get_issue',
            title: 'Get issue',
            description: 'Fetch one issue with its description, attachments, watchers and plugin data ' \
                         "where permitted, and optionally its notes and history. #{CUSTOM_FIELD_LABELS}",
            permission: :view_issues,
            scopes: %i[view_issue_watchers view_private_notes],
-           plugin_scopes: { redmine_checklists: %i[view_checklists] },
+           plugin_scopes: { redmine_checklists: %i[view_checklists], additional_tags: %i[view_issue_tags] },
            schema: {
              'type' => 'object',
              'properties' => {
@@ -64,7 +68,7 @@ module RedmineMcpPlugin
         if plugin?(:redmine_checklists) && user.allowed_to?(:view_checklists, issue.project)
           payload[:checklists] = issue.checklists.map { |item| checklist_row(item) }
         end
-        payload[:tag_list] = issue.tag_list.to_a if plugin?(:redmineup_tags)
+        payload[:tag_list] = issue.tag_list.to_a if tags_readable?(issue.project)
 
         include_journals = arguments.fetch('include_journals', true)
         payload[:journals] = journals_for(issue) if include_journals
@@ -147,14 +151,13 @@ module RedmineMcpPlugin
       end
 
       # The plugin journals the whole list on both sides; its own diff says what changed. A change it
-      # cannot name (a reorder) is left out, as on the issue page.
+      # cannot name (a reorder) is left out, as on the issue page. Which changes the diff names
+      # depends on the edition: the light one has done and undone only, so a key it lacks is empty.
       def checklist_change(detail)
         diff    = JournalChecklistHistory.new(detail.old_value, detail.value).diff
-        changes = {
-          added: diff[:added].map(&:subject), removed: diff[:removed].map(&:subject),
-          done: diff[:done].map(&:subject), undone: diff[:undone].map(&:subject),
-          renamed: diff[:renamed].map { |was, became| { from: was.subject, to: became.subject } }
-        }.reject { |_key, items| items.empty? }
+        changes = %i[added removed done undone].index_with { |kind| Array(diff[kind]).map(&:subject) }
+        changes[:renamed] = Array(diff[:renamed]).map { |was, became| { from: was.subject, to: became.subject } }
+        changes = changes.reject { |_kind, items| items.empty? }
         { property: detail.property, name: detail.prop_key, **changes } if changes.any?
       end
     end

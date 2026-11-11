@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateIssueRelations < Tool
+      include Issues
+
       tool 'update_issue_relations',
            title: 'Update issue relations',
            description: 'Add or remove relations between issues, only when the user asks. End with the url.',

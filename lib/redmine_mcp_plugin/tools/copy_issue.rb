@@ -3,6 +3,9 @@
 module RedmineMcpPlugin
   module Tools
     class CopyIssue < Tool
+      include IssueWrites
+      include Issues
+
       tool 'copy_issue',
            title: 'Copy issue',
            description: 'Create a new issue as a copy of another, in the same project or in project. The copy ' \

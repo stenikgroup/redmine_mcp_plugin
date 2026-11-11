@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class CloseProject < Tool
+      include ProjectStructure
+
       tool 'close_project',
            title: 'Close project',
            description: 'Close a project and its subprojects: they stay readable and nothing in them can be ' \

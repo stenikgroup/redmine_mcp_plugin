@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateMembership < Tool
+      include ProjectStructure
+
       tool 'update_membership',
            title: 'Add or update a project member',
            description: 'Give a user or a group roles in a project: adds the member, or replaces the roles of ' \

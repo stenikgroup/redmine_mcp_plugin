@@ -4,6 +4,10 @@ module RedmineMcpPlugin
   module Tools
     # Takes no checklist items: offered the parameter, agents filled it on every issue unasked.
     class CreateIssue < Tool
+      include IssueWrites
+      include Issues
+      include Tags
+
       tool 'create_issue',
            title: 'Create issue',
            description: 'Create an issue. Call get_issue_fields first for what this user may set. ' \
@@ -11,8 +15,9 @@ module RedmineMcpPlugin
                         'the refused fields: tell the user and ask. End with the url.',
            permission: :add_issues,
            scopes: %i[manage_subtasks add_issue_watchers set_issues_private set_own_issues_private],
-           plugin_scopes: { redmineup_tags: %i[edit_tags create_tags] },
-           plugin_properties: { redmineup_tags: %w[tag_list] },
+           plugin_scopes: { redmineup_tags: %i[edit_tags create_tags],
+                            additional_tags: %i[edit_issue_tags create_issue_tags] },
+           plugin_properties: { redmineup_tags: %w[tag_list], additional_tags: %w[tag_list] },
            rendered: %w[description],
            plain: %w[subject],
            write: true,
@@ -58,7 +63,7 @@ module RedmineMcpPlugin
         # Every per-field check runs; one refusal then names each blocked parameter.
         problems   = []
         attributes = issue_attributes_from(issue, arguments.except('tracker'), problems)
-        tags = plugin?(:redmineup_tags) ? tag_attributes(issue, arguments, problems) : {}
+        tags = tag_attributes(issue, arguments, problems)
         refuse_blocked!(issue, problems)
 
         # Indifferent access: the tags plugin reads its keys as symbols.

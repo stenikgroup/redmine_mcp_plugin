@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateVersion < Tool
+      include ProjectStructure
+
       tool 'update_version',
            title: 'Update version',
            description: 'Change a version\'s name, description, due date, status, sharing or wiki page. Only ' \

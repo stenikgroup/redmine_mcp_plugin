@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateProject < Tool
+      include ProjectStructure
+
       tool 'update_project',
            title: 'Update project',
            description: 'Change a project\'s name, description, homepage, visibility, parent, modules, trackers ' \

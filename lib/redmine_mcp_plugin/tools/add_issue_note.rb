@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class AddIssueNote < Tool
+      include Issues
+
       tool 'add_issue_note',
            title: 'Add note to issue',
            description: 'Append a note (comment) to an existing issue. End with the url.',

@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class DeleteVersion < Tool
+      include ProjectStructure
+
       tool 'delete_version',
            title: 'Delete version',
            description: 'Delete a version for good. Redmine refuses one that issues target, that a custom ' \

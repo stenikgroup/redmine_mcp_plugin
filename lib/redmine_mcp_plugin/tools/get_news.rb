@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class GetNews < Tool
+      include NewsItems
+
       tool 'get_news',
            title: 'Get news',
            description: 'Fetch one news item with its description and comments.',

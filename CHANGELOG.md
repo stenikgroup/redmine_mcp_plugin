@@ -53,14 +53,30 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   on each Ruby they accept, from 3.2 to 4.0, on every pull request and once a week.
   `test/docker/Dockerfile` builds one cell of that matrix to run it locally.
 - CI also runs RuboCop, with Redmine's own gems, and measures the line coverage of the plugin, which
-  must stay above 95%. `test/coverage.rb` prints it per file. The suite went from 207 to 342 tests
+  must stay above 98%. `test/coverage.rb` prints it per file. The suite went from 207 to 342 tests
   and from 85% to 97% of the lines: every tool is now called at least once, the HTTP Basic and
-  session modes, the discovery documents and `Endpoint.add_tools` have their own tests, and what
-  stays uncovered is the support of `redmine_checklists` and `redmineup_tags`, which the test images
-  do not install.
+  session modes, the discovery documents and `Endpoint.add_tools` have their own tests. The support
+  of `redmine_checklists` and `redmineup_tags`, which the test images cannot install, runs over
+  stand-ins for the two plugins.
 
 ### Changed
 
+- The `Tool` base class is split. It keeps what every tool needs; the helpers of one domain are in a
+  module the tool includes: `Tool::CustomFields`, `Tool::Issues`, `Tool::IssueWrites`,
+  `Tool::Watchers`, `Tool::NewsItems`, `Tool::WikiPages`, `Tool::TimeEntries`,
+  `Tool::ProjectStructure`. **For an extension:** a tool that called one of those helpers through
+  inheritance now includes its module; `docs/extensions.md` lists them.
+- `docs/third-party-plugins.md` lists the plugins the tools reach into and how far each is tested:
+  against the plugin itself, over a stand-in only, or not at all.
+- `additional_tags` is supported as a second tags plugin: the same `tag_list`, `add_tag_list` and
+  `remove_tag_list` parameters, under its own permissions, `edit_issue_tags`, `create_issue_tags` and
+  `view_issue_tags` to read. **Upgrade step:** with it installed the server advertises those three
+  scopes; enable them on the MCP application.
+- `get_issue` reads the history of a checklist under the light edition of `redmine_checklists`, whose
+  diff names ticks only. It failed there on any journaled checklist change.
+- `redmine_checklists`, `redmineup_tags` and `additional_tags` are served only while they are installed and still have
+  every name the tools call. A version that lost one is treated as absent, with its tool, parameters
+  and fields left out and one line in the log, where a write used to fail half way.
 - `update_issue_note` edits another user's note when the role holds `edit_issue_notes`, as Redmine
   does. It was refused whatever the role, as a product rule, which is lifted. A token is kept to its
   owner's notes by leaving `edit_issue_notes` out of its scopes. The reply names the note's `author`.

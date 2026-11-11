@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class ListWikiPageVersions < Tool
+      include WikiPages
+
       tool 'list_wiki_page_versions',
            title: 'List wiki page versions',
            description: 'List the history of a wiki page, newest first: version, author, comment and date. ' \

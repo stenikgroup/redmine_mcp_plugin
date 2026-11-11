@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateTimeEntry < Tool
+      include TimeEntries
+
       tool 'update_time_entry',
            title: 'Update time entry',
            description: 'Correct a time entry from list_time_entries: hours, activity, date, comment, custom ' \

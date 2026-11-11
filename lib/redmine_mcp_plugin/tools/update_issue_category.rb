@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateIssueCategory < Tool
+      include ProjectStructure
+
       tool 'update_issue_category',
            title: 'Update issue category',
            description: 'Rename an issue category or change its default assignee. Only what is sent changes.',

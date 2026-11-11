@@ -10,6 +10,8 @@ module RedmineMcpPlugin
   # stands for, and AUTHORISED_FILTERS, the filters that name a project, an
   # issue or a project's record, as field => { operator => kind }.
   module QueryTool
+    include Tool::CustomFields
+
     # Their values are the user directory or the project list; describe names
     # the paged tool that already answers those instead of inlining them.
     USER_FILTERS    = %w[assigned_to_id author_id watcher_id updated_by last_updated_by user_id].freeze

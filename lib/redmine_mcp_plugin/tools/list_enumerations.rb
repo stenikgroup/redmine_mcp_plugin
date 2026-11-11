@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class ListEnumerations < Tool
+      include CustomFields
+
       tool 'list_enumerations',
            title: 'List trackers, statuses, priorities and activities',
            description: 'List the trackers, issue statuses, priorities and time entry activities ' \

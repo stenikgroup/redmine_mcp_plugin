@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class ListProjects < Tool
+      include CustomFields
+
       tool 'list_projects',
            title: 'List projects',
            description: 'List the Redmine projects visible to the authenticated user. Pass include_custom_fields ' \
