@@ -20,9 +20,24 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `select_project_publicity`, `select_project_modules`, `manage_members`, `manage_versions` and
   `manage_categories`, and `view_members` in read-only mode too; enable them on the MCP application
   in Administration → Applications, or the next consent fails with `invalid_scope`.
+- `update_time_entry` corrects a time entry: the caller's own under `edit_own_time_entries`, anyone's
+  under `edit_time_entries`.
+- `copy_issue` copies an issue, in its project or to another, with core's options (attachments,
+  subtasks, the "copied to" relation) and the field overrides of `create_issue`.
+- `log_time` and `update_time_entry` take `user`, to log time for someone else under
+  `log_time_for_other_users`. `log_time` replies with the entry's `user`.
 - `get_project` returns `inherit_members`.
 - `TODO.md` lists the tools held back: those with no REST API action yet, those that need the
   `admin` scope, and what is not planned.
+
+### Changed
+
+- `update_issue_note` edits another user's note when the role holds `edit_issue_notes`, as Redmine
+  does. It was refused whatever the role, as a product rule, which is lifted. A token is kept to its
+  owner's notes by leaving `edit_issue_notes` out of its scopes. The reply names the note's `author`.
+  **Upgrade step:** with writes on, the server also advertises `edit_issue_notes`,
+  `edit_time_entries`, `edit_own_time_entries`, `log_time_for_other_users` and `copy_issues`; enable
+  them on the MCP application.
 
 ## [0.3.0] - 2026-11-06
 

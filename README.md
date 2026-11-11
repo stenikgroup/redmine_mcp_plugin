@@ -142,9 +142,14 @@ sections.
 | `edit_issues` | Edit issues | Issue tracking |
 | `edit_own_issues` | Edit own issues | Issue tracking |
 | `add_issue_notes` | Add notes | Issue tracking - **not** the "Add notes" under Contacts |
-| `log_time` | Log spent time | Time tracking - **not** "Log spent time for other users" |
+| `log_time` | Log spent time | Time tracking |
+| `log_time_for_other_users` | Log spent time for other users | Time tracking |
+| `edit_time_entries` | Edit time logs | Time tracking |
+| `edit_own_time_entries` | Edit own time logs | Time tracking |
+| `copy_issues` | Copy issues | Issue tracking |
 | `set_notes_private` | Set notes as private | Issue tracking |
 | `edit_own_issue_notes` | Edit own notes | Issue tracking |
+| `edit_issue_notes` | Edit notes | Issue tracking |
 | `manage_subtasks` | Manage subtasks | Issue tracking |
 | `add_issue_watchers` | Add watchers | Issue tracking |
 | `delete_issue_watchers` | Delete watchers | Issue tracking |
@@ -203,7 +208,8 @@ Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_priv
 `manage_subtasks`, `add_issue_watchers`, `delete_issue_watchers`, `set_issues_private`,
 `set_own_issues_private`, `manage_issue_relations`, `manage_news`, `add_project`, `add_subprojects`,
 `edit_project`, `close_project`, `select_project_publicity`, `select_project_modules`, `manage_members`,
-`manage_versions` and `manage_categories`. With redmine_checklists installed, `view_checklists`
+`manage_versions`, `manage_categories`, `edit_issue_notes`, `edit_time_entries`, `edit_own_time_entries`,
+`log_time_for_other_users` and `copy_issues`. With redmine_checklists installed, `view_checklists`
 joins the read-only set and `done_checklists` and `edit_checklists` the write set; with
 redmineup_tags, `create_tags` and `edit_tags` join the write set. The OAuth application in
 Redmine must enable at least these; it may enable more. The same file probes Doorkeeper for PKCE support rather than
@@ -352,17 +358,21 @@ Writing one is the other way round: `add_issue_note` and `update_issue_note` wit
 check `set_notes_private` through the scope-aware `allowed_to?`, which is why that permission is
 advertised as a scope once writes are on.
 
-### Own notes only
+### Notes and time of other users
 
-One deliberate exception to "roles are the boundary": `update_issue_note` edits only notes the caller
-wrote, even when their role holds `edit_issue_notes`, which in Redmine also allows editing other
-people's notes. This is a product requirement, and the refusal names it ("You can only edit your own
-notes") rather than using the permission wording, because the cause is our rule, not a Redmine
-permission. Everything else is core's: the journal is found through `Journal.visible`, the right
-through `Journal#editable_by?`, and a note saved blank is refused because Redmine would delete it.
-The tool is gated on `edit_own_issue_notes` and only that scope is advertised, so Redmine itself
-refuses other people's notes and our check is a second guard. A role with "Edit notes" but without
-"Edit own notes" will not see the tool; the remedy is to tick "Edit own notes" on that role.
+`update_issue_note` and `update_time_entry` follow core's pair of permissions: `edit_own_issue_notes`
+or `edit_own_time_entries` for what the caller wrote or logged, `edit_issue_notes` or
+`edit_time_entries` for anyone's. Up to 0.3.0 `update_issue_note` refused other people's notes
+whatever the role; that rule is lifted, and a token is kept to its owner's notes and time by leaving
+`edit_issue_notes` and `edit_time_entries` out of its scopes. The refusal then names the missing
+permission. The journal is found through `Journal.visible`, the right through
+`Journal#editable_by?` and `TimeEntry#editable_by?`, and a note saved blank is refused because
+Redmine would delete it. Both tools tell the agent to say whose note or entry it is and to get
+confirmation before changing someone else's.
+
+`log_time` and `update_time_entry` take `user`. Anyone but the caller needs
+`log_time_for_other_users` and must be able to log time on the project, the two causes core reports
+alike as "User is invalid".
 
 ## Tools
 
@@ -386,11 +396,13 @@ while read-only mode is on, which is the default.
 | `create_issue` (write) | `add_issues`, on the requested tracker, plus `manage_subtasks` for `parent`, `add_issue_watchers` for `watcher_users`, `set_issues_private` or `set_own_issues_private` for `is_private`, `edit_tags` for `tag_list` and `create_tags` for a tag that does not exist yet |
 | `update_issue` (write) | `edit_issues`, or `edit_own_issues` on one's own issue, on the issue's tracker, plus the per-field permissions of `create_issue` and `delete_issue_watchers` for `remove_watcher_users`. Watching or unwatching oneself needs none, as core's Watch link |
 | `add_issue_note` (write) | `add_issue_notes`, on the issue's tracker, plus `set_notes_private` for private notes |
-| `update_issue_note` (write) | `edit_own_issue_notes`; only notes the caller wrote, plus `set_notes_private` to change privacy |
+| `update_issue_note` (write) | `edit_own_issue_notes` for a note the caller wrote, `edit_issue_notes` for anyone's, plus `set_notes_private` to change privacy |
 | `add_issue_attachment` (write) | `edit_issues`, `edit_own_issues` or `add_issue_notes`, as core's `attachments_addable?`. A text file within `attachment_max_size` and the extension lists; saved with a journal, so watchers are mailed as for an issue update |
 | `update_issue_checklists` (write) | `edit_checklists` to add or rename, `done_checklists` or `edit_checklists` to tick or untick. Present only with redmine_checklists |
 | `update_issue_relations` (write) | `manage_issue_relations` on the issue's project, as core's relation form. Every relation type core has |
-| `log_time` (write) | `log_time`. Always for the authenticated user |
+| `log_time` (write) | `log_time`, plus `log_time_for_other_users` when `user` names someone else |
+| `update_time_entry` (write) | `edit_own_time_entries` for the caller's own entry, `edit_time_entries` for anyone's, plus `view_time_entries` to read it and `log_time_for_other_users` to change whose it is. The entry stays on its issue and project |
+| `copy_issue` (write) | `copy_issues` on the source project and `add_issues` on the target's tracker, plus the per-field permissions of `create_issue`. Copies the fields, custom fields, parent and attachments, the watchers under `add_issue_watchers`, the subtasks on request, and links the copy as core does |
 | `create_news` (write) | `manage_news`. Publishes at once and, when `news_added` is a notified event, emails project members and news watchers; the tool tells the agent to get explicit confirmation first |
 | `update_news` (write) | `manage_news`. Editing sends no email |
 | `create_project` (write) | `add_project` for a root project, `add_subprojects` on the parent for a subproject, plus `select_project_publicity` for `is_public`, `select_project_modules` for `enabled_modules` and `manage_members` for `inherit_members`. A non-administrator becomes a member with the default role, as in core |
