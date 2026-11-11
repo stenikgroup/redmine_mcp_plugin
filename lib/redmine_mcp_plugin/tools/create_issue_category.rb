@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class CreateIssueCategory < Tool
+      include ProjectStructure
+
       tool 'create_issue_category',
            title: 'Create issue category',
            description: 'Add an issue category to a project. get_project lists the existing ones.',

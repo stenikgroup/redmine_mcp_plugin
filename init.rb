@@ -42,3 +42,6 @@ Rails.application.config.after_initialize { RedmineMcpPlugin::DoorkeeperScopeNar
 
 # Every plugin has loaded by now: the tools others added are checked, and a refusal logged, at boot.
 Rails.application.config.after_initialize { RedmineMcpPlugin::Endpoint.tools }
+
+# And the plugins some tools reach into: one that is installed and no longer has what they call is said here.
+Rails.application.config.after_initialize { RedmineMcpPlugin::Integrations.report }

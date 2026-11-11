@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateNews < Tool
+      include NewsItems
+
       tool 'update_news',
            title: 'Update news',
            description: 'Edit a news item\'s title, summary or description. Editing sends no email. ' \

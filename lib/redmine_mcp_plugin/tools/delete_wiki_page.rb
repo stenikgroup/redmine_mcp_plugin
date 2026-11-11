@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class DeleteWikiPage < Tool
+      include WikiPages
+
       tool 'delete_wiki_page',
            title: 'Delete wiki page',
            description: 'Delete a wiki page for good, with its whole history and attachments. Get explicit ' \

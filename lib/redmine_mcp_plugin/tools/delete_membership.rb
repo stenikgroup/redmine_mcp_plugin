@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class DeleteMembership < Tool
+      include ProjectStructure
+
       tool 'delete_membership',
            title: 'Remove a project member',
            description: 'Remove a user or a group from a project: they lose every role there, and with it ' \

@@ -3,6 +3,9 @@
 module RedmineMcpPlugin
   module Tools
     class GetIssueFields < Tool
+      include IssueWrites
+      include Tags
+
       tool 'get_issue_fields',
            title: 'Get settable issue fields',
            description: 'Report what the authenticated user may set on an issue: the attributes it may ' \
@@ -25,6 +28,7 @@ module RedmineMcpPlugin
              'additionalProperties' => false
            }
 
+      # Tags are global; the list is capped so a big instance stays readable.
       MAX_TAGS = 100
 
       private
@@ -66,7 +70,7 @@ module RedmineMcpPlugin
           payload[:checklists] = { edit: user.allowed_to?(:edit_checklists, project),
                                    done: user.allowed_to?(:done_checklists, project) || user.allowed_to?(:edit_checklists, project) }
         end
-        payload[:tags] = tags_for(project) if plugin?(:redmineup_tags)
+        payload[:tags] = tags_summary(project, MAX_TAGS) if tags_plugin && !tags_switched_off?
         payload
       end
 
@@ -125,13 +129,6 @@ module RedmineMcpPlugin
 
       def custom_fields_for(issue)
         custom_field_rows(issue, issue.required_attribute_names(user))
-      end
-
-      # Tags are global; the plugin's own list, capped so a big instance stays readable.
-      def tags_for(project)
-        names = Issue.all_tags.map(&:name)
-        { edit: user.allowed_to?(:edit_tags, project), create: user.allowed_to?(:create_tags, project),
-          available: names.first(MAX_TAGS), truncated: names.size > MAX_TAGS }
       end
     end
   end

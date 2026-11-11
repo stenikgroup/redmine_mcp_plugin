@@ -92,8 +92,11 @@ installing or removing one of those plugins changes the advertised set the way a
 | `edit_checklists` | Edit checklist items | redmine_checklists | With writes on | `update_issue_checklists` |
 | `create_tags` | Create tags | redmineup_tags | With writes on | A tag that does not exist yet, in `tag_list` |
 | `edit_tags` | Edit tags | redmineup_tags | With writes on | `tag_list` in `create_issue` and `update_issue` |
+| `view_issue_tags` | View issue tags | additional_tags | Read-only mode | The tags in `get_issue` |
+| `create_issue_tags` | Create issue tags | additional_tags | With writes on | A tag that does not exist yet, in `tag_list` |
+| `edit_issue_tags` | Edit issue tags | additional_tags | With writes on | `tag_list` in `create_issue` and `update_issue` |
 
-All five sit under Issue tracking in the application form.
+All of them sit under Issue tracking in the application form.
 
 `search` is Redmine's own search, and its SQL decides who matches a private note from the role, not
 from the token. The tool closes that for a token without `view_private_notes`: no private note is

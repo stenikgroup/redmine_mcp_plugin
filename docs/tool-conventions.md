@@ -150,11 +150,17 @@ reads one value for `=` and `!`, so a list of ids is joined into it rather than 
 
 ## Checklists and tags
 
-Plugins: checklists (redmine_checklists) and tags (redmineup_tags) exist for the agent only while the
-plugin is installed. `Redmine::Plugin.installed?` is read per request, not at boot, because plugins
+Plugins, listed with how far each is tested in [third-party-plugins.md](third-party-plugins.md): checklists (redmine_checklists) and tags (redmineup_tags or additional_tags) exist for the agent only while the
+plugin is installed and still has what the tools call; a version that lost one of those names is
+treated as absent and logged, see [internals.md](internals.md#reaching-into-redmine_checklists-and-redmineup_tags).
+`Redmine::Plugin.installed?` is read per request, not at boot, because plugins
 load alphabetically and this one boots before redmineup_tags. Without the plugin the
 `update_issue_checklists` tool, the `tag_list`, `add_tag_list` and `remove_tag_list`
-parameters and the five plugin scopes are absent from the served list and the advertised scopes.
+parameters and the plugin's scopes are absent from the served list and the advertised scopes.
+The tag parameters are the same with either tags plugin. They differ underneath: additional_tags
+has its own permissions, among them one to read tags, takes the resulting list where redmineup_tags
+takes additions and removals, and keeps issue tags behind a setting that is off by default, in
+which case a tag is refused by name and none is returned.
 `create_issue` takes no checklist items and refuses a `checklists` argument as unknown: offered one,
 the agent turned a description's bullets into items on every issue it created. Items are added with
 `update_issue_checklists`, which the agent is told to use only when the user asks.

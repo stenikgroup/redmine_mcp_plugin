@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class GetProject < Tool
+      include ProjectStructure
+
       tool 'get_project',
            title: 'Get project',
            description: 'Fetch one project by identifier or numeric id, with its enabled modules, trackers, ' \

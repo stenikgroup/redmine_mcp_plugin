@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class CreateVersion < Tool
+      include ProjectStructure
+
       tool 'create_version',
            title: 'Create version',
            description: 'Add a version (milestone) to a project. get_project lists the existing ones. ' \

@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class DeleteIssueCategory < Tool
+      include ProjectStructure
+
       tool 'delete_issue_category',
            title: 'Delete issue category',
            description: 'Delete an issue category for good. Its issues lose their category, or take ' \

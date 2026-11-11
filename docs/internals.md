@@ -73,7 +73,24 @@ the version Redmine ships, restart, then open the OAuth2 consent screen and clic
 mode on. Until it is removed, the module puts back the recalled controller the patch strips, so an
 install that still carries it keeps working.
 
-## Journaling through redmine_checklists and redmineup_tags
+## Reaching into redmine_checklists and redmineup_tags
+
+additional_tags is reached the same way, as a second tags plugin; with both installed redmineup_tags
+is the one the tools talk to.
+
+None of them publishes an API for this. [`integrations.rb`](../lib/redmine_mcp_plugin/integrations.rb) lists,
+per plugin, every name the tools call: models, methods added to `Issue`, hook listeners. A plugin is
+usable when it is installed and all of them are there. One that is installed and lost a name, after
+an upgrade say, is treated as absent, and the log says once at boot what is missing:
+
+```
+[redmine_mcp_plugin] redmine_checklists 4.1.0 is installed but not usable: it has no JournalChecklistHistory. Its tool, parameters and fields are not served.
+```
+
+The code that does the reaching is in two modules, `Tool::Checklists` and `Tool::Tags`, and in the
+tools that include them.
+
+### Journaling
 
 Both plugins journal through controller hooks. The tools call the two listeners directly with the
 keys each reads: the tags listener gets the issue and its real tag list, which it checks for
@@ -128,11 +145,20 @@ application; [`test/coverage.rb`](../test/coverage.rb) reads the plugin's share 
 files that are not fully covered, and takes an optional minimum:
 
 ```bash
-docker run --rm -e COVERAGE=1 -v "$PWD":/redmine/plugins/redmine_mcp_plugin redmine-mcp-test:master-ruby4.0 sh -c 'bin/rails redmine:plugins:test NAME=redmine_mcp_plugin && ruby plugins/redmine_mcp_plugin/test/coverage.rb 95'
+docker run --rm -e COVERAGE=1 -v "$PWD":/redmine/plugins/redmine_mcp_plugin redmine-mcp-test:master-ruby4.0 sh -c 'bin/rails redmine:plugins:test NAME=redmine_mcp_plugin && ruby plugins/redmine_mcp_plugin/test/coverage.rb 98'
 ```
 
-What stays uncovered is the support of `redmine_checklists` and `redmineup_tags`: neither plugin is
-installed in the test images, so their code paths never run.
+`redmine_checklists` and `redmineup_tags` cannot be installed in the test images, and
+`additional_tags` needs `additionals` and PostgreSQL or MySQL, so the code that reaches into them
+runs over stand-ins, in [`test/support/plugin_stand_ins.rb`](../test/support/plugin_stand_ins.rb):
+the smallest thing that honours the contract in `RedmineMcpPlugin::Integrations`. Those tests prove
+the tools' own logic, permissions and refusals.
+
+When the real `redmine_checklists` or `additional_tags` is installed in the Redmine under test, its
+stand-in steps aside and the same tests run over the plugin: that is how the stand-ins were checked,
+against redmine_checklists 4.1.0 light and additional_tags on its main branch. The
+`Third-party plugins` CI job does it for `additional_tags` on every pull request. `redmineup_tags`
+has only ever run over its stand-in here.
 
 **RuboCop.** The gems are Redmine's own. The configuration and the paths are named because Redmine's
 root configuration excludes `plugins/`: without them RuboCop inspects no file and reports nothing.

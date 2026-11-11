@@ -20,7 +20,7 @@ Metrics/AbcSize:
 
 # Configuration parameters: CountComments, CountAsOne.
 Metrics/ClassLength:
-  Max: 880
+  Max: 211
 
 # Configuration parameters: AllowedMethods, AllowedPatterns.
 Metrics/CyclomaticComplexity:
@@ -70,40 +70,14 @@ Rails/FindEach:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Rails/IndexWith:
   Exclude:
-    - 'lib/redmine_mcp_plugin/tool.rb'
     - 'lib/redmine_mcp_plugin/tools/list_time_entries.rb'
     - 'lib/redmine_mcp_plugin/tools/search_issues.rb'
-
-# This cop supports safe autocorrection (--autocorrect).
-Style/ExplicitBlockArgument:
-  Exclude:
-    - 'lib/redmine_mcp_plugin/tool.rb'
-
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: AllowedReceivers.
-# AllowedReceivers: Thread.current
-Style/HashEachMethods:
-  Exclude:
-    - 'lib/redmine_mcp_plugin/tool.rb'
-
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: InverseMethods, InverseBlocks.
-Style/InverseMethods:
-  Exclude:
-    - 'lib/redmine_mcp_plugin/tool.rb'
 
 # Configuration parameters: AllowedMethods.
 # AllowedMethods: respond_to_missing?
 Style/OptionalBooleanParameter:
   Exclude:
     - 'lib/redmine_mcp_plugin/query_tool.rb'
-
-# This cop supports unsafe autocorrection (--autocorrect-all).
-# Configuration parameters: ConvertCodeThatCanStartToReturnNil, AllowedMethods, MaxChainLength.
-# AllowedMethods: present?, blank?, presence, try, try!
-Style/SafeNavigation:
-  Exclude:
-    - 'lib/redmine_mcp_plugin/tool.rb'
 
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: AllowMethodsWithArguments, AllowedMethods, AllowedPatterns, AllowComments.

@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class ReopenProject < Tool
+      include ProjectStructure
+
       tool 'reopen_project',
            title: 'Reopen project',
            description: 'Reopen a closed project and its closed subprojects. End with the url.',

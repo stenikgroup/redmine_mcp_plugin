@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class ListWikiPages < Tool
+      include WikiPages
+
       tool 'list_wiki_pages',
            title: 'List wiki pages',
            description: "List the titles of a project's wiki pages that the authenticated user may read.",

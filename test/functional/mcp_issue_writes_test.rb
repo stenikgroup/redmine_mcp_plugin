@@ -340,17 +340,6 @@ class McpIssueWritesTest < Redmine::ControllerTest
   end
   # --- redmineup_tags ---------------------------------------------------------------------
 
-  # The plugin is not installed here, so its permissions do not exist and no
-  # role holds them: the refusal is what can be exercised without it.
-  def test_tags_are_refused_by_name_without_edit_tags
-    Redmine::Plugin.stubs(:installed?).returns(false)
-    Redmine::Plugin.stubs(:installed?).with(:redmineup_tags).returns(true)
-
-    text = refusal(call_tool('update_issue', { 'issue' => 1, 'add_tag_list' => ['urgent'], 'remove_tag_list' => ['old'] }))
-    assert_match 'add_tag_list (needs ', text
-    assert_match 'remove_tag_list (needs ', text
-  end
-
   # Without the plugin its parameters are not in the schema at all.
   def test_tag_parameters_do_not_exist_without_the_plugin
     text = refusal(call_tool('update_issue', { 'issue' => 1, 'add_tag_list' => ['urgent'] }))

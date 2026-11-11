@@ -4,6 +4,9 @@ module RedmineMcpPlugin
   module Tools
     # Present only with the redmine_checklists plugin installed.
     class UpdateIssueChecklists < Tool
+      include Checklists
+      include Issues
+
       tool 'update_issue_checklists',
            title: 'Update checklist items',
            description: 'Add, rename, tick or untick checklist items on an issue, only when the user asks. ' \

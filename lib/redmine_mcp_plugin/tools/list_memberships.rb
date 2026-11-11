@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class ListMemberships < Tool
+      include ProjectStructure
+
       tool 'list_memberships',
            title: 'List project members',
            description: 'List the members of a project, users and groups, each with its roles; a role marked ' \

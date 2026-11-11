@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class GetWikiPage < Tool
+      include WikiPages
+
       tool 'get_wiki_page',
            title: 'Get wiki page',
            description: 'Fetch the text of one wiki page, or of an earlier version from list_wiki_page_versions.',

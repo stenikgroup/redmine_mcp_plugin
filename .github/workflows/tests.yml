@@ -94,10 +94,10 @@ jobs:
     env:
       RAILS_ENV: test
       BUNDLE_WITHOUT: development
-      # Below this the build fails. The lines left out are the support of
-      # redmine_checklists and redmineup_tags, which are not installed here,
-      # and a few rescues of failures that cannot be provoked.
-      MINIMUM_COVERAGE: 95
+      # Below this the build fails. What is left out is a few rescues of
+      # failures that cannot be provoked; redmine_checklists and
+      # redmineup_tags, which cannot be installed here, run over stand-ins.
+      MINIMUM_COVERAGE: 98
 
     steps:
       - name: Check out Redmine 7.0-stable
@@ -146,6 +146,87 @@ jobs:
 
       - name: Line coverage of the plugin
         run: ruby plugins/redmine_mcp_plugin/test/coverage.rb "$MINIMUM_COVERAGE"
+
+  # The tools that reach into another plugin, over the plugin itself where it
+  # can be installed: additional_tags, with the additionals it needs, which run
+  # on PostgreSQL or MySQL only. Elsewhere they run over stand-ins. Not part of
+  # the gate below: a release of someone else's plugin must not block a merge.
+  plugins:
+    name: Third-party plugins
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: redmine
+          POSTGRES_PASSWORD: redmine
+          POSTGRES_DB: redmine_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U redmine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      RAILS_ENV: test
+      BUNDLE_WITHOUT: development
+
+    steps:
+      - name: Check out Redmine 7.0-stable
+        uses: actions/checkout@v6
+        with:
+          repository: redmine/redmine
+          ref: 7.0-stable
+
+      - name: Check out the plugin
+        uses: actions/checkout@v6
+        with:
+          path: plugins/redmine_mcp_plugin
+
+      - name: Check out additionals
+        uses: actions/checkout@v6
+        with:
+          repository: alphanodes/additionals
+          path: plugins/additionals
+
+      - name: Check out additional_tags
+        uses: actions/checkout@v6
+        with:
+          repository: alphanodes/additional_tags
+          path: plugins/additional_tags
+
+      - name: Configure the test database
+        run: |
+          cat > config/database.yml <<EOF
+          test:
+            adapter: postgresql
+            host: localhost
+            database: redmine_test
+            username: redmine
+            password: redmine
+            encoding: utf8
+          EOF
+
+      - name: Hold minitest at 5.x where Redmine does not
+        run: grep -q "gem 'minitest'" Gemfile || echo "gem 'minitest', '~> 5.27'" > Gemfile.local
+
+      - name: Install Ruby 3.4 and the gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+
+      - name: Migrate
+        run: bin/rails db:migrate redmine:plugins:migrate
+
+      - name: Run the integration tests over the real additional_tags
+        run: >-
+          bin/rails test
+          plugins/redmine_mcp_plugin/test/functional/mcp_plugin_integrations_test.rb
+          plugins/redmine_mcp_plugin/test/unit/integrations_test.rb
 
   # The one check main requires: branch protection names this job instead of
   # the jobs above, so they can change without touching the settings.

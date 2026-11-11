@@ -70,7 +70,7 @@ The server stays read-only until you switch read-only mode off on the same setti
 
 | You are | Read |
 |---|---|
-| Installing or administering | [Installation and settings](docs/installation.md), [Authentication](docs/authentication.md), [OAuth application scopes](docs/scopes.md) |
+| Installing or administering | [Installation and settings](docs/installation.md), [Authentication](docs/authentication.md), [OAuth application scopes](docs/scopes.md), [Third-party plugins](docs/third-party-plugins.md) |
 | Using the tools through an agent | [Tools](docs/tools.md), [Tool conventions](docs/tool-conventions.md) |
 | Writing an extension or a client | [Extensions](docs/extensions.md), [Protocol](docs/protocol.md) |
 | Maintaining or auditing the plugin | [Permission model](docs/permissions.md), [Internals](docs/internals.md), [Security notice](docs/security.md) |

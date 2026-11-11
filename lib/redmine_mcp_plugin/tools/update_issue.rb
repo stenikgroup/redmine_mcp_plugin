@@ -3,6 +3,10 @@
 module RedmineMcpPlugin
   module Tools
     class UpdateIssue < Tool
+      include IssueWrites
+      include Issues
+      include Tags
+
       tool 'update_issue',
            title: 'Update issue',
            description: 'Change an issue: any field get_issue_fields lists, custom fields, watchers, tags, ' \
@@ -11,8 +15,10 @@ module RedmineMcpPlugin
                         'ask. "none" clears an optional date or reference. End with the url.',
            permission: %i[edit_issues edit_own_issues],
            scopes: %i[manage_subtasks add_issue_watchers delete_issue_watchers set_issues_private set_own_issues_private],
-           plugin_scopes: { redmineup_tags: %i[edit_tags create_tags] },
-           plugin_properties: { redmineup_tags: %w[add_tag_list remove_tag_list] },
+           plugin_scopes: { redmineup_tags: %i[edit_tags create_tags],
+                            additional_tags: %i[edit_issue_tags create_issue_tags] },
+           plugin_properties: { redmineup_tags: %w[add_tag_list remove_tag_list],
+                                additional_tags: %w[add_tag_list remove_tag_list] },
            rendered: %w[description notes],
            plain: %w[subject],
            write: true,
@@ -50,7 +56,7 @@ module RedmineMcpPlugin
 
       class << self
         # The tags plugin is named only while it is installed.
-        def mcp_description = plugin?(:redmineup_tags) ? super : super.sub(' tags,', '')
+        def mcp_description = Integrations.tags_plugin ? super : super.sub(' tags,', '')
       end
 
       private
@@ -76,7 +82,7 @@ module RedmineMcpPlugin
         change_tracker!(issue, arguments['tracker'], problems) if sent.include?('tracker')
         attributes = issue_attributes_from(issue, arguments.except('tracker'), problems)
         attributes['tracker_id'] = issue.tracker_id if sent.include?('tracker')
-        tags          = plugin?(:redmineup_tags) ? tag_attributes(issue, arguments, problems) : {}
+        tags          = tag_attributes(issue, arguments, problems)
         adds, removes = watcher_changes(issue, arguments, problems)
         refuse_blocked!(issue, problems)
 

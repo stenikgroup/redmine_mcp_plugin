@@ -6,6 +6,7 @@ module RedmineMcpPlugin
     # fields are the ones Redmine's own Spent time list offers this user.
     class ListTimeEntries < Tool
       include QueryTool
+      include CustomFields
 
       NAMED_FILTERS = { 'issue' => 'issue_id', 'user' => 'user_id', 'activity' => 'activity_id',
                         'from' => 'spent_on', 'to' => 'spent_on' }.freeze

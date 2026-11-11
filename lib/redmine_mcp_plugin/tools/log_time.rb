@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class LogTime < Tool
+      include TimeEntries
+
       tool 'log_time',
            title: 'Log spent time',
            description: 'Log spent time on an issue, or on a project when there is no issue, for the ' \

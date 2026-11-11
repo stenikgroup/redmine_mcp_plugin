@@ -26,6 +26,27 @@ if mcp
 end
 ```
 
+A tool gets from `Tool` what every tool needs: the permission and read-only checks, schema
+validation, `authorize!`, `fetch_project`, `fetch_issue`, paging with `limit_for`, `offset_for` and
+`paged`, `absolute_url`, and the refusal helpers `blocked` and `refuse_blocked!`. The helpers of one
+domain are in a module the tool includes, as the built-in tools do:
+
+| Module | For |
+|---|---|
+| `Tool::CustomFields` | Reading and writing custom field values, minus the excluded fields |
+| `Tool::Issues` | Core's rules for a note and an edit, relations, the saved state of an issue |
+| `Tool::IssueWrites` | The fields of `create_issue` and `update_issue`, each resolved and refused by name |
+| `Tool::Watchers` | Who may be added as a watcher, and the permissions for someone else |
+| `Tool::NewsItems`, `Tool::WikiPages`, `Tool::TimeEntries`, `Tool::ProjectStructure` | Those records |
+| `QueryTool` | Filters, sorting and grouping over a core query |
+
+```ruby
+class MyTool < RedmineMcpPlugin::Tool
+  include CustomFields
+  # ...
+end
+```
+
 The first argument names the extension in log lines. The block returns its tools, each a
 `RedmineMcpPlugin::Tool` subclass; an empty list adds nothing. It is called once, after every plugin has
 loaded, so plugins may load in any order and the classes and permissions it names exist by then. The

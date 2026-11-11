@@ -3,6 +3,8 @@
 module RedmineMcpPlugin
   module Tools
     class CreateNews < Tool
+      include NewsItems
+
       tool 'create_news',
            title: 'Create news',
            description: 'Publish a news item in a project. It is visible at once and may be emailed to ' \
