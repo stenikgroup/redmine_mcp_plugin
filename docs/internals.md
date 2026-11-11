@@ -78,7 +78,9 @@ on every push to `main` and once a week, on each Ruby that each Redmine ref acce
 | `7.0-stable` | 8.1 | 3.2, 3.3, 3.4, 4.0 |
 | `master` (trunk) | 8.1 | 3.3, 3.4, 4.0 |
 
-Rails is not an axis of its own: each Redmine ref pins one exact version. The weekly run is there
+Rails is not an axis of its own: each Redmine ref pins one exact version. A last job, `Tests passed`,
+succeeds only when every cell does: it is the one check `main` requires, so the matrix can change
+without touching the branch protection. The weekly run is there
 because trunk and the stable branches move without a commit here, and a core removal reaches trunk
 before any release.
 
