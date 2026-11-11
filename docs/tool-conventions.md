@@ -19,7 +19,12 @@ from `get_issue_fields`; the string `"none"` clears an optional date or referenc
 answered with zero.
 
 Arguments are checked against each tool's declared schema. A value outside a declared `enum`, below a
-declared `minimum`, of the wrong type, or missing when required is refused rather than ignored.
+declared `minimum`, of the wrong type, or missing when required is refused rather than ignored. An
+array must be an array, each of its items of the type the schema gives, and an object an object: a
+single value where a list is declared is refused, not wrapped.
+
+A result is returned twice, as `structuredContent` and as the same JSON in a text block, compact,
+for clients that read only text.
 
 The list tools take `limit` and `offset` and return `total_count`, `returned`, `offset` and `has_more`.
 `limit` is capped by the `max_results` setting, 100 by default, so page with `offset`.

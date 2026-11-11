@@ -68,6 +68,15 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `edit_time_entries`, `edit_own_time_entries`, `log_time_for_other_users` and `copy_issues`; enable
   them on the MCP application.
 
+- An argument declared as an array must be an array, and one declared as an object an object. A
+  single value where a list is declared was passed on and wrapped by each tool, and `filters` that
+  were not an object were ignored, so the search answered as if none had been sent. Every array
+  argument now declares its `items`, whose type is checked too. **For an extension:** a schema
+  keyword the validator does not enforce is logged at boot.
+- The text copy of a tool result is compact JSON. It was indented, which is only tokens for the
+  model reading it; `structuredContent` is unchanged.
+- A tool call runs with `User.current` set to the tool's user, restored afterwards. The three tools
+  that go through core code reading the global asserted it by hand.
 - An API key is read from the `X-Redmine-API-Key` header only. `?key=` in the URL, which left the
   key in access logs, and a `key` member of the JSON body are no longer taken for one.
 - HTTP Basic takes an API key as the username only while the API key mode is on. Switching that

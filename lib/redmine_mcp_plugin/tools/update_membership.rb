@@ -18,7 +18,7 @@ module RedmineMcpPlugin
                'project' => { 'type' => %w[string integer], 'description' => 'Project identifier or numeric id.' },
                'principal' => { 'type' => %w[integer string],
                                 'description' => 'User id from list_users, a group id, or "me".' },
-               'roles' => { 'type' => 'array', 'description' => 'Role names or ids, at least one.' }
+               'roles' => { 'type' => 'array', 'items' => { 'type' => %w[string integer] }, 'description' => 'Role names or ids, at least one.' }
              },
              'required' => %w[project principal roles],
              'additionalProperties' => false

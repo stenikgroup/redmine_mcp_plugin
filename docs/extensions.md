@@ -53,7 +53,13 @@ An extension's tools share everything else with this plugin's:
 - **Request handling.** Authentication, the Origin and protocol-version checks, the JSON-RPC handling and
   the status codes.
 - **Tool behaviour.** The `Tool` base: the permission check through `User#allowed_to?`, the read-only
-  refusal, schema validation and coercion, the helpers, and the wording of every refusal.
+  refusal, schema validation and coercion, the helpers, and the wording of every refusal. A call
+  runs with `User.current` set to the tool's `user`, so core code that reads the global sees the
+  same user. The validator enforces `type` (string, integer, number, boolean, array, object),
+  `enum`, `minimum`, `required`, `additionalProperties` and the `type` and `enum` of an array's
+  `items`; `description` and `format` are passed on unchecked. Any other keyword in a schema is
+  served to clients and checked by nobody, and is logged at boot as
+  `<tool> declares what /mcp does not enforce`.
 - **Text.** The formatting guide and the parameter suffixes. User ids, project ids and the custom fields
   that render point to `list_users`, `list_projects` and `get_issue_fields`.
 - **Discovery.** Doorkeeper, both discovery documents and the icon.

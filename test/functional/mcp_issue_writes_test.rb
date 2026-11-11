@@ -356,4 +356,22 @@ class McpIssueWritesTest < Redmine::ControllerTest
     text = refusal(call_tool('update_issue', { 'issue' => 1, 'add_tag_list' => ['urgent'] }))
     assert_match 'Unknown argument: "add_tag_list"', text
   end
+
+  # --- the shape of an argument ---------------------------------------------------------------
+
+  def test_an_array_argument_must_be_an_array_of_what_it_declares
+    assert_match 'add_watcher_users must be an array, got 3',
+                 refusal(call_tool('update_issue', { 'issue' => 1, 'add_watcher_users' => 3 }))
+    assert_match 'add_watcher_users[0] must be an integer or a string, got an object',
+                 refusal(call_tool('update_issue', { 'issue' => 1, 'add_watcher_users' => [{ 'id' => 3 }] }))
+    assert_match 'add must be an array', refusal(call_tool('update_issue_relations', { 'issue' => 1, 'add' => 'relates 7' }))
+    assert_match 'add[0] must be an object, got 7', refusal(call_tool('update_issue_relations', { 'issue' => 1, 'add' => [7] }))
+    assert_empty Issue.find(1).watcher_user_ids
+  end
+
+  def test_an_object_argument_must_be_an_object
+    text = refusal(call_tool('create_issue', { 'project' => 'ecookbook', 'tracker' => 'Bug', 'subject' => 'Shape',
+                                               'custom_field_values' => 'MySQL' }))
+    assert_match 'custom_field_values must be an object, got "MySQL"', text
+  end
 end

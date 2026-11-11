@@ -25,7 +25,7 @@ module RedmineMcpPlugin
                'scope' => { 'type' => 'string', 'enum' => %w[all my_projects bookmarks subprojects],
                             'description' => 'all (default without project), my_projects, bookmarks, or subprojects ' \
                                              'to include those of project.' },
-               'types' => { 'type' => 'array',
+               'types' => { 'type' => 'array', 'items' => { 'type' => 'string' },
                             'description' => 'Any of issues, news, documents, changesets, wiki_pages, messages, ' \
                                              'projects. Defaults to all the caller may read.' },
                'all_words' => { 'type' => 'boolean', 'description' => 'Every word must match. Default true.' },

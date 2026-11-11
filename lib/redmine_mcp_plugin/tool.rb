@@ -17,6 +17,9 @@ module RedmineMcpPlugin
   # issues. Relying on allowed_to? alone would return rows from projects the
   # user is not a member of. Neither check subsumes the other.
   class Tool
+    # #call under the tool's user, and the readers of how they authenticated.
+    prepend ActingUser
+
     class << self
       attr_reader :mcp_name, :mcp_title, :mcp_description, :mcp_schema,
                   :mcp_permission, :mcp_write, :mcp_destructive
@@ -134,11 +137,8 @@ module RedmineMcpPlugin
 
     attr_reader :user, :auth
 
-    def auth_mode   = @auth[:mode]
-    def oauth?      = @auth[:mode] == :oauth2
-    def oauth_scopes = @auth[:scopes]
-
-    # Invoked by the dispatcher. Subclasses implement #perform.
+    # Invoked by the dispatcher, through ActingUser#call, which sets
+    # User.current to this tool's user first. Subclasses implement #perform.
     def call(arguments)
       klass = self.class
       raise PermissionError, 'This tool is disabled: the server is in read-only mode' if klass.write? && Settings.read_only?

@@ -223,4 +223,10 @@ class McpQueryToolsTest < Redmine::ControllerTest
     assert_includes described['filters'].map { |filter| filter['field'] }, 'spent_on'
     assert described['sortable'].any?
   end
+
+  # Filters that are not an object were ignored, and the search answered as if none had been sent.
+  def test_filters_must_be_an_object
+    assert_match 'filters must be an object, got "status_id=1"', refusal(call_tool('search_issues', { 'filters' => 'status_id=1' }))
+    assert_match 'filters must be an object, got an array', refusal(call_tool('list_time_entries', { 'filters' => ['issue_id'] }))
+  end
 end
