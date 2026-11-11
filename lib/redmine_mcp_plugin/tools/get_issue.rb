@@ -98,13 +98,18 @@ module RedmineMcpPlugin
         # The plugin's own history leaves its changes out for anyone without view_checklists.
         checklists = !plugin?(:redmine_checklists) || user.allowed_to?(:view_checklists, issue.project)
         private_notes = user.allowed_to?(:view_private_notes, issue.project)
-        issue.journals.visible(user).includes(:user).order(:created_on).filter_map do |journal|
+        shown = issue.journals.visible(user).includes(:user).order(:created_on).filter_map do |journal|
           next if journal.private_notes? && journal.user_id != user.id && !private_notes
 
           details = journal.visible_details(user)
           details = details.reject { |detail| detail.property == 'cf' && excluded_custom_field?(detail.prop_key) }
           details = details.reject { |detail| checklist_detail?(detail) } unless checklists
-          rows    = details.filter_map { |detail| detail_row(detail, history) }
+          [journal, details]
+        end
+        # One lookup per format for the whole history, not one per change.
+        names = custom_detail_names(shown.flat_map(&:last))
+        shown.filter_map do |journal, details|
+          rows = details.filter_map { |detail| detail_row(detail, history, names) }
           # As the issue page: an entry with no notes and nothing the user may see is left out.
           next if rows.empty? && !journal.notes?
 
@@ -119,8 +124,19 @@ module RedmineMcpPlugin
         end
       end
 
+      # The names of the values a custom field stores as ids, keyed by [custom field id, stored id].
+      def custom_detail_names(details)
+        wanted = details.flat_map do |detail|
+          field = detail.custom_field if detail.property == 'cf'
+          next [] unless field && LABELLED_FORMATS.include?(field.field_format)
+
+          [detail.old_value, detail.value].reject(&:blank?).map { |id| [field.field_format, field.id, id.to_s] }
+        end
+        custom_value_names_by_format(wanted)
+      end
+
       # As the issue history shows them: a record or custom field by its name, an id it cannot name as the id.
-      def detail_row(detail, history)
+      def detail_row(detail, history, names)
         return checklist_change(detail) if checklist_diff?(detail)
 
         name      = detail.prop_key
@@ -128,7 +144,11 @@ module RedmineMcpPlugin
         new_value = detail.value
         if detail.property == 'cf'
           # visible_details already drops a deleted field's details; the id is only a fallback.
-          name = detail.custom_field&.name || name
+          field = detail.custom_field
+          name  = field&.name || name
+          # A user or version the caller may not see stays an id, as its label stays null.
+          old_value = names[[field.id, old_value.to_s]] || old_value if field
+          new_value = names[[field.id, new_value.to_s]] || new_value if field
         elsif detail.property == 'attr' && REFERENCE_DETAILS.include?(name)
           name = name.delete_suffix('_id')
           if NAMED_DETAILS.include?(detail.prop_key)

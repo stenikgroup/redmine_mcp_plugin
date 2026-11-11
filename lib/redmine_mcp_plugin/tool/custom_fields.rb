@@ -73,11 +73,14 @@ module RedmineMcpPlugin
 
       # Core gives plain strings for a list field, and [label, value] pairs for
       # the formats stored as ids and for bool. Empty for a free-form format.
+      # A user field opens with core's "<< me >>" shortcut for the caller, who is
+      # listed again by name: one row per value, the named one.
       def possible_values_for(field, record)
-        field.possible_values_options(record).map do |option|
+        rows = field.possible_values_options(record).map do |option|
           label, value = option.is_a?(Array) ? option : [option, option]
           { value: value.to_s, label: label.to_s }
         end
+        rows.reverse.uniq { |row| row[:value] }.reverse
       end
 
       # Same reason as the attributes: core keeps only the custom fields this user may edit here.
@@ -209,7 +212,12 @@ module RedmineMcpPlugin
 
           Array(value.value).reject(&:blank?).map { |id| [format, value.custom_field_id, id.to_s] }
         end
-        wanted.group_by(&:first).each_with_object({}) do |(format, group), labels|
+        custom_value_names_by_format(wanted)
+      end
+
+      # `wanted` lists [format, custom field id, stored id]; one query per format.
+      def custom_value_names_by_format(wanted)
+        wanted.uniq.group_by(&:first).each_with_object({}) do |(format, group), labels|
           labels.merge!(custom_value_names(format, group.map { |_, field_id, id| [field_id, id] }))
         end
       end
