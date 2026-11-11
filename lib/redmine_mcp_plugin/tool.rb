@@ -291,6 +291,21 @@ module RedmineMcpPlugin
       wiki
     end
 
+    # The wiki for a tool that needs `permission` and not view_wiki_pages, as
+    # core's own actions: editing or reading the history is granted apart.
+    def wiki_for(project, permission)
+      require_module!(project, :wiki)
+      authorize!(permission, project)
+      project.wiki || raise(ToolError, "Project #{project.identifier} has no wiki")
+    end
+
+    def fetch_wiki_page(wiki, title)
+      page = wiki.find_page(title.to_s)
+      raise ToolError, "No wiki page titled #{title.inspect}" if page.nil?
+
+      page
+    end
+
     # People are named by id or "me" everywhere. Query filters pass "me" on to
     # core, which also adds the user's groups; writes resolve it here.
     def user_ref!(value, name)

@@ -26,6 +26,17 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   subtasks, the "copied to" relation) and the field overrides of `create_issue`.
 - `log_time` and `update_time_entry` take `user`, to log time for someone else under
   `log_time_for_other_users`. `log_time` replies with the entry's `user`.
+- `update_wiki_page` creates or rewrites a wiki page under `edit_wiki_pages`, with core's optimistic
+  lock on `version`. `list_wiki_page_versions` lists a page's history and `get_wiki_page` takes
+  `version`, both under `view_wiki_edits`; `get_wiki_page` also returns `current_version`, `author`,
+  `comments`, `parent_title` and `url`.
+- `list_files` and `add_file` read and feed the Files module, under `view_files` and `manage_files`.
+- `search` is Redmine's search box across issues, news, documents, changesets, wiki pages, forum
+  messages and projects, under `search_project` and each type's own `view_` permission.
+  **Upgrade step:** the server also advertises, read-only mode included, `search_project`,
+  `view_wiki_edits`, `view_files`, `view_documents`, `view_changesets` and `view_messages`, and with
+  writes on `edit_wiki_pages`, `rename_wiki_pages`, `protect_wiki_pages` and `manage_files`; enable
+  them on the MCP application.
 - `get_project` returns `inherit_members`.
 - `TODO.md` lists the tools held back: those with no REST API action yet, those that need the
   `admin` scope, and what is not planned.

@@ -137,6 +137,12 @@ sections.
 | `view_time_entries` | View spent time | Time tracking |
 | `view_news` | View news | News |
 | `view_members` | View project members | Project |
+| `search_project` | Search projects | Project |
+| `view_wiki_edits` | View wiki history | Wiki |
+| `view_files` | View files | Files |
+| `view_documents` | View documents | Documents - read by `search` only |
+| `view_changesets` | View changesets | Repository - read by `search` only |
+| `view_messages` | View messages | Forums - read by `search` only |
 | `view_checklists` | View checklist | Issue tracking, with redmine_checklists installed |
 | `add_issues` | Add issues | Issue tracking |
 | `edit_issues` | Edit issues | Issue tracking |
@@ -147,6 +153,10 @@ sections.
 | `edit_time_entries` | Edit time logs | Time tracking |
 | `edit_own_time_entries` | Edit own time logs | Time tracking |
 | `copy_issues` | Copy issues | Issue tracking |
+| `edit_wiki_pages` | Edit wiki pages | Wiki |
+| `rename_wiki_pages` | Rename wiki pages | Wiki |
+| `protect_wiki_pages` | Protect wiki pages | Wiki |
+| `manage_files` | Manage files | Files |
 | `set_notes_private` | Set notes as private | Issue tracking |
 | `edit_own_issue_notes` | Edit own notes | Issue tracking |
 | `edit_issue_notes` | Edit notes | Issue tracking |
@@ -203,13 +213,15 @@ check at runtime (`scopes`), an extension's tools included, dropping the write t
 is read-only and the tools and scopes of plugins that are not installed, intersected with what
 Doorkeeper will accept.
 Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_private_notes`, `view_wiki_pages`,
-`view_time_entries`, `view_news` and `view_members`; with writes on, add `add_issues`, `add_issue_notes`,
+`view_time_entries`, `view_news`, `view_members`, `search_project`, `view_wiki_edits`, `view_files`,
+`view_documents`, `view_changesets` and `view_messages`; with writes on, add `add_issues`, `add_issue_notes`,
 `edit_issues`, `edit_own_issues`, `edit_own_issue_notes`, `log_time`, `set_notes_private`,
 `manage_subtasks`, `add_issue_watchers`, `delete_issue_watchers`, `set_issues_private`,
 `set_own_issues_private`, `manage_issue_relations`, `manage_news`, `add_project`, `add_subprojects`,
 `edit_project`, `close_project`, `select_project_publicity`, `select_project_modules`, `manage_members`,
 `manage_versions`, `manage_categories`, `edit_issue_notes`, `edit_time_entries`, `edit_own_time_entries`,
-`log_time_for_other_users` and `copy_issues`. With redmine_checklists installed, `view_checklists`
+`log_time_for_other_users`, `copy_issues`, `edit_wiki_pages`, `rename_wiki_pages`, `protect_wiki_pages`
+and `manage_files`. With redmine_checklists installed, `view_checklists`
 joins the read-only set and `done_checklists` and `edit_checklists` the write set; with
 redmineup_tags, `create_tags` and `edit_tags` join the write set. The OAuth application in
 Redmine must enable at least these; it may enable more. The same file probes Doorkeeper for PKCE support rather than
@@ -386,7 +398,10 @@ while read-only mode is on, which is the default.
 | `search_issues`, `get_issue` | `view_issues`. `get_issue` adds the attachments, the subtasks the caller can see, the relations whose other issue the caller can see, the watchers under `view_issue_watchers`, the checklist under `view_checklists`, and the tags |
 | `get_attachment` | `view_issues`, through core's `Attachment#visible?`. Metadata, and the content of a text file within `file_max_size_displayed` |
 | `list_queries` | `view_issues`. Saved queries, filtered by `IssueQuery.visible` |
-| `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages` |
+| `list_wiki_pages`, `get_wiki_page` | `view_wiki_pages`. `get_wiki_page` with `version` reads an earlier version, under `view_wiki_edits` as in core |
+| `list_wiki_page_versions` | `view_wiki_edits`. The page's history, newest first, without the text |
+| `list_files` | `view_files`, with the Files module on. The project's files and those of its versions, as core's `/projects/:id/files.json` |
+| `search` | `search_project`. Core's search box: issues, news, documents, changesets, wiki pages, forum messages and projects, each only under its own `view_` permission |
 | `list_news`, `get_news` | `view_news`. Filtered by `News.visible`; with a project, that project's own news, as core's index |
 | `list_enumerations` | none. Trackers, statuses, priorities, time entry activities; with `project`, that project's activities and, for a caller with `log_time` there, the time entry custom fields with their required flag and allowed values |
 | `list_users` | none. Filtered by `Principal.visible` |
@@ -405,6 +420,8 @@ while read-only mode is on, which is the default.
 | `copy_issue` (write) | `copy_issues` on the source project and `add_issues` on the target's tracker, plus the per-field permissions of `create_issue`. Copies the fields, custom fields, parent and attachments, the watchers under `add_issue_watchers`, the subtasks on request, and links the copy as core does |
 | `create_news` (write) | `manage_news`. Publishes at once and, when `news_added` is a notified event, emails project members and news watchers; the tool tells the agent to get explicit confirmation first |
 | `update_news` (write) | `manage_news`. Editing sends no email |
+| `update_wiki_page` (write) | `edit_wiki_pages`. Creates the page or replaces its text, keeping the history; `version` refuses an edit made meanwhile, as core's 409. A protected page needs `protect_wiki_pages`, and `parent_title` on an existing page `rename_wiki_pages`. Watchers are mailed as for an edit in the browser |
+| `add_file` (write) | `manage_files`, with the Files module on. A text file, on the project or on one of its versions; mails members when `file_added` is a notified event, as core |
 | `create_project` (write) | `add_project` for a root project, `add_subprojects` on the parent for a subproject, plus `select_project_publicity` for `is_public`, `select_project_modules` for `enabled_modules` and `manage_members` for `inherit_members`. A non-administrator becomes a member with the default role, as in core |
 | `update_project` (write) | `edit_project`, plus the per-field permissions of `create_project`, and `add_subprojects` or `add_project` to move it. The identifier cannot be changed |
 | `close_project`, `reopen_project` (write) | `close_project`. Subprojects follow, as in core |
@@ -421,6 +438,11 @@ the role or the token may not set, a parent the caller may not extend, a `sharin
 on a closed project says the project is closed, where core's permission check only says no. Nothing
 here deletes: no project, version, category or member can be removed, and archiving needs an
 administrator; see [TODO.md](TODO.md).
+
+`search` runs core's own fetcher. Core keeps, for one project, the types the user may view there; its
+queries then go through `.visible` scopes, which read roles and not a token's scopes, so the tool
+also leaves out every type whose `view_` scope the token lacks. `searched_types` says what was
+searched. An excerpt is cut at 500 characters.
 
 `get_issue` respects per-field custom field visibility and filters private notes by role and token scope, as above.
 Its history reads as the issue page's: a custom field by its name, a reference without `_id` (`status`,

@@ -22,6 +22,11 @@ validations on. Revisit when core exposes them.
 | `comment_news` | `comment_news` | No API action on comments |
 | `save_query` (create or update a saved query) | `save_queries`, `manage_public_queries` | Queries are read-only (`index` only) |
 
+## Postponed: needs a binary transport
+
+`add_issue_attachment` and `add_file` take the file as text, so only text files can be sent. Images,
+PDFs and archives need a way to pass bytes, which the tools do not have yet.
+
 ## Postponed: requires the `admin` scope
 
 Redmine has no fine-grained permission for these; they are open to
