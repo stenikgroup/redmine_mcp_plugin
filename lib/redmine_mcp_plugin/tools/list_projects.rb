@@ -29,7 +29,8 @@ module RedmineMcpPlugin
                                                '{"operator": "><", "values": ["1", "5"]}, or a bare string or array, ' \
                                                'which means operator "=".' },
                'custom_fields' => { 'type' => 'array',
-                                    'description' => 'Custom field ids to return with each project.' },
+                                    'description' => 'Custom field ids to return with each project; a field the ' \
+                                                     "user's roles do not show on a project is left out there." },
                'sort' => { 'type' => 'string', 'description' => 'field:asc or field:desc; desc by default.' },
                'group_by' => { 'type' => 'string',
                                'description' => 'Count the whole filtered set per group, e.g. "cf_<id>". Fields from describe.' },

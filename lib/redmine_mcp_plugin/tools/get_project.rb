@@ -5,8 +5,8 @@ module RedmineMcpPlugin
     class GetProject < Tool
       tool 'get_project',
            title: 'Get project',
-           description: 'Fetch one project by identifier or numeric id: its settings, custom fields, ' \
-                        'enabled modules, trackers, categories and versions.',
+           description: 'Fetch one project by identifier or numeric id: its settings, the custom fields ' \
+                        "the user's roles show, enabled modules, trackers, categories and versions.",
            permission: :view_project,
            schema: {
              'type' => 'object',
