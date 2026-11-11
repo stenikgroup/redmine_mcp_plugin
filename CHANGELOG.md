@@ -49,6 +49,9 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 - `get_project` returns `inherit_members`.
 - `TODO.md` lists the tools held back: those with no REST API action yet, those that need the
   `admin` scope, and what is not planned.
+- The test suite runs in CI, on GitHub Actions: Redmine 6.1.0, `6.1-stable`, `7.0-stable` and trunk,
+  on each Ruby they accept, from 3.2 to 4.0, on every pull request and once a week.
+  `test/docker/Dockerfile` builds one cell of that matrix to run it locally.
 
 ### Changed
 

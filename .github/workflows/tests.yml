@@ -1,0 +1,86 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Redmine trunk and the stable branches move without a commit here: a core
+  # removal has to turn this red on its own.
+  schedule:
+    - cron: '17 5 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Redmine ${{ matrix.redmine }} / Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      # Every Ruby each Redmine ref accepts in its Gemfile. Rails is not an
+      # axis: each ref pins one exact version (7.2 on 6.1, 8.1 on 7.0 and trunk).
+      matrix:
+        include:
+          # The floor declared by requires_redmine in init.rb.
+          - { redmine: '6.1.0', ruby: '3.2' }
+          - { redmine: '6.1-stable', ruby: '3.2' }
+          - { redmine: '6.1-stable', ruby: '3.3' }
+          - { redmine: '6.1-stable', ruby: '3.4' }
+          - { redmine: '7.0-stable', ruby: '3.2' }
+          - { redmine: '7.0-stable', ruby: '3.3' }
+          - { redmine: '7.0-stable', ruby: '3.4' }
+          - { redmine: '7.0-stable', ruby: '4.0' }
+          # Trunk.
+          - { redmine: 'master', ruby: '3.3' }
+          - { redmine: 'master', ruby: '3.4' }
+          - { redmine: 'master', ruby: '4.0' }
+
+    env:
+      RAILS_ENV: test
+      BUNDLE_WITHOUT: development
+
+    steps:
+      - name: Check out Redmine ${{ matrix.redmine }}
+        uses: actions/checkout@v6
+        with:
+          repository: redmine/redmine
+          ref: ${{ matrix.redmine }}
+
+      - name: Check out the plugin
+        uses: actions/checkout@v6
+        with:
+          path: plugins/redmine_mcp_plugin
+
+      # Redmine's Gemfile reads this file to pick the database adapter gem, so
+      # it has to exist before Bundler runs.
+      - name: Configure the test database
+        run: |
+          cat > config/database.yml <<EOF
+          test:
+            adapter: sqlite3
+            database: db/redmine_test.sqlite3
+          EOF
+
+      # Redmine releases older than the minitest 6 lock (6.1.0) resolve to
+      # minitest 6 on a fresh bundle, which the Rails 7.2 test runner cannot drive.
+      - name: Hold minitest at 5.x where Redmine does not
+        run: grep -q "gem 'minitest'" Gemfile || echo "gem 'minitest', '~> 5.27'" > Gemfile.local
+
+      - name: Install Ruby ${{ matrix.ruby }} and the gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Migrate
+        run: bin/rails db:migrate redmine:plugins:migrate
+
+      - name: Run the plugin tests
+        run: bin/rails redmine:plugins:test NAME=redmine_mcp_plugin
