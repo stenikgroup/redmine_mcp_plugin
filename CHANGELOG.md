@@ -84,6 +84,11 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 
 ### Fixed
 
+- An OAuth application that enables fewer scopes than the server advertises can connect. The
+  authorization request of an MCP client is narrowed to the scopes its application enables, so
+  leaving a scope such as `delete_issues` unticked withholds its tools instead of failing the
+  consent with `invalid_scope`. The "Upgrade step" notes of this release are no longer blocking: a
+  scope not yet enabled only keeps its tools hidden (#44).
 - A JSON-RPC `params` that is not an object is answered `-32602 Invalid params`. An array ended as
   `-32603 Internal error`, with a backtrace in the log.
 - `delete_project` replies `scheduled`, and `deleted` only once the project is gone. It claimed the

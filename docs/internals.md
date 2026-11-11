@@ -24,6 +24,25 @@ assuming it, and advertises `S256` only - never `plain`, which MCP clients may n
 PKCE support is confirmed on a live instance: `/.well-known/oauth-authorization-server` returns
 `"code_challenge_methods_supported": ["S256"]`, verified against the live server.
 
+### Narrowing an authorization request to its application
+
+Claude requests exactly what `scopes_supported` lists, and both discovery documents are read before
+any `client_id` is known, so the list cannot follow one application. Doorkeeper refuses the whole
+request with `invalid_scope` when one requested scope is not enabled on the application, which left
+"enable every advertised scope" as the only configuration that connected, and took away the lever
+an administrator has to withhold a tool.
+
+`lib/redmine_mcp_plugin/doorkeeper_scope_narrowing.rb` is prepended to
+`Doorkeeper::AuthorizationsController` and replaces the requested `scope` with its intersection with
+the application's scopes, before Doorkeeper validates it. RFC 6749 section 3.3 lets an authorization
+server grant less than was requested; the consent screen lists the narrowed scopes and the token
+response names them. An empty intersection is left as requested, so it is still refused rather than
+falling back to Doorkeeper's default scopes.
+
+Only a request whose `resource` parameter (RFC 8707, required of MCP clients) is this server's
+`/mcp` address is narrowed, and only while the endpoint and OAuth2 are on. Any other OAuth client of
+the same Redmine keeps Doorkeeper's stock behaviour.
+
 ### Doorkeeper URL generation
 
 Redmine's layouts, and the plugins that extend them, reference controllers relatively:

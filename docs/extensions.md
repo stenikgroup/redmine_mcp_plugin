@@ -70,9 +70,9 @@ What an administrator does:
 
 1. **Install and restart,** as in [Deployment](installation.md#deployment).
 2. **Enable the new scopes** on the existing MCP application: the ones
-   `/.well-known/oauth-protected-resource` now lists. Until then a new connection fails with
-   `invalid_scope`, because the client requests exactly that list. When the permissions come from a
-   plugin that is already installed, they can be enabled before the restart.
+   `/.well-known/oauth-protected-resource` now lists. Until then a new connection works but its
+   token lacks them, so the new tools stay hidden. When the permissions come from a plugin that is
+   already installed, they can be enabled before the restart.
 3. **Grant the permissions** to the roles of the people who should use the tools.
 4. **Reconnect.** A token keeps the scopes it was issued with, so each user reconnects the connector to
    see the new tools.

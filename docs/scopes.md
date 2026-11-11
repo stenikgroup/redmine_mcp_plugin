@@ -1,10 +1,15 @@
 # OAuth application scopes
 
-Administration → Applications → the MCP application. Enable at least the scopes the server
-advertises. Enabling more is fine - verified live, consent succeeds - but fewer fails with
-`invalid_scope`, because the client requests exactly what `scopes_supported` lists. The permission
-names below are the scope; the label is what the English UI shows, and several labels repeat across
-sections.
+Administration → Applications → the MCP application. Enable the scopes of the tools the application
+should offer. The client requests everything `scopes_supported` lists, and the server narrows that
+request to what the application enables: the consent screen shows the narrowed list, the token
+carries it, and `tools/list` leaves out the tools it does not cover. Leaving `delete_issues`
+unticked, for instance, gives every user of that application a connection that cannot delete an
+issue. Enabling more than the server advertises is fine too. Only an application that enables none
+of the requested scopes is refused, with `invalid_scope`.
+
+The permission names below are the scope; the label is what the English UI shows, and several labels
+repeat across sections.
 
 This page is the one list of scopes. How the server computes the advertised set is in
 [internals.md](internals.md#supported_scopes); what each tool does with its permission is in
@@ -100,5 +105,6 @@ Several scopes gate no tool but one parameter, or one part of a reply, as the "U
 shows. A permission a tool checks at runtime must be advertised, or no token can ever carry it.
 
 Adding a tool with a new permission changes the advertised set, and every user reconnects to get a
-token that carries it. The application only needs editing if it did not already enable the scope.
+token that carries it. The application only needs editing if it did not already enable the scope;
+until it does, connections keep working without the new tool.
 An extension adds the permissions of its tools in the same way; see [extensions.md](extensions.md).

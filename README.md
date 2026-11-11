@@ -59,7 +59,7 @@ every line of this table; what else was checked, and how, is in
 3. Switch the endpoint on in Administration → Plugins → Redmine MCP Server → Configure. Keep OAuth2
    and switch API key mode off: it ships on, and a key carries its user's full permissions.
 4. Register an application in Administration → Applications and enable the scopes listed in
-   [docs/scopes.md](docs/scopes.md). Fewer than the server advertises fails with `invalid_scope`.
+   [docs/scopes.md](docs/scopes.md). A scope left unticked withholds its tools from that application.
 5. Point the client at `https://redmine.example.com/mcp`. claude.ai reads the discovery documents
    and runs the OAuth2 flow itself; a fixed-header configuration for testing is in
    [docs/authentication.md](docs/authentication.md#client-configuration).
