@@ -52,7 +52,7 @@ relative controllers either, so the plugin's module is still needed on Redmine 7
 the other hand, is no longer needed with plugin 0.2.1 or later, and can be removed: revert the file to
 the version Redmine ships, restart, then open the OAuth2 consent screen and click Authorize with sudo
 mode on. Until it is removed, the module puts back the recalled controller the patch strips, so an
-install that still carries it keeps working. Be API's instance never carried it.
+install that still carries it keeps working.
 
 ## Journaling through redmine_checklists and redmineup_tags
 

@@ -88,7 +88,7 @@ is the third link in a chain:
 2. [stenikgroup/redmine_mcp_plugin](https://github.com/stenikgroup/redmine_mcp_plugin), by Stenik
    (Stoyan Tinchev), forked from the first: write tools, every issue field, relations, news,
    attachments, checklists and tags, narrowed OAuth2 scopes, the Doorkeeper fix and extensions.
-3. This fork, by Be API (Amaury Balmer), forked from the second: Redmine 7.0 compatibility, a
+3. This fork, by Amaury Balmer, forked from the second: Redmine 7.0 compatibility, a
    working test suite, custom field values checked before a write, and **security fixes the first
    two do not have** (see [docs/security.md](docs/security.md)). See the changelog.
 

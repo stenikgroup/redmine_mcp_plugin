@@ -163,7 +163,7 @@ First version of the herewithme fork. Checked on Redmine 6.1.2 (Rails 7.2.3) and
 - The README describes the fork lineage. The clone URL, the plugin URL and the
   `resource_documentation` of `/.well-known/oauth-protected-resource` point to this repository.
 - The README's target platform becomes a compatibility table: the versions checked for this
-  release, and the platform Be API runs in production.
+  release, and the platform the fork runs on in production.
 
 ## [0.1.0]
 
