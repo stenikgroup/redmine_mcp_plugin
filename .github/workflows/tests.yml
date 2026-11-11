@@ -84,3 +84,14 @@ jobs:
 
       - name: Run the plugin tests
         run: bin/rails redmine:plugins:test NAME=redmine_mcp_plugin
+
+  # The one check main requires: branch protection names this job instead of
+  # the matrix cells, so the matrix can change without touching the settings.
+  passed:
+    name: Tests passed
+    if: always()
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every matrix job succeeded
+        run: test "${{ needs.test.result }}" = "success"
