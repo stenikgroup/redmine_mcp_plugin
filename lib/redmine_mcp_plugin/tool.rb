@@ -589,7 +589,9 @@ module RedmineMcpPlugin
       unknown  = Array(ids).map(&:to_s) - editable
       return nil if unknown.empty?
 
-      names = CustomField.where(id: unknown).pluck(:id, :name).to_h
+      # By name only where the user sees the field somewhere; a field hidden
+      # from them reads like an id that does not exist.
+      names = CustomField.visible(user).where(id: unknown).pluck(:id, :name).to_h
       unknown.map { |id| names[id.to_i] || "id #{id}" }.join(', ')
     end
 

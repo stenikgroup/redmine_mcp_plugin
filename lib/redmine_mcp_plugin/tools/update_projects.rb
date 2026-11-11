@@ -57,7 +57,8 @@ module RedmineMcpPlugin
                'default_assigned_to' => { 'type' => %w[integer string], 'description' => 'User id, or "me".' },
                'default_issue_query' => { 'type' => %w[integer string], 'description' => 'Query id.' },
                'custom_field_values' => { 'type' => 'object',
-                                          'description' => 'By field id; the value, never the label; "" clears.' }
+                                          'description' => 'By field id; the value, never the label, exactly as ' \
+                                                           'get_project_fields lists it; "" clears.' }
              },
              'additionalProperties' => false
            }
