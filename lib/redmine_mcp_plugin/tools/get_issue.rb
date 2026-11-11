@@ -87,9 +87,8 @@ module RedmineMcpPlugin
       # in SQL that ignores OAuth scopes, so the scope-aware allowed_to? check
       # follows it, as in Issue#visible_journals_with_index.
       def journals_for(issue)
-        # Core's history lookup names a project by Project#visible?, which reads User.current.
-        raise ToolError, 'You do not have permission to do that' unless User.current == user
-
+        # Core's history lookup names a project by Project#visible?, which reads
+        # User.current: Tool#call has set it to this tool's user.
         # Fresh per call: it caches names, and a project's name depends on who asks.
         history = Class.new { include IssuesHelper }.new
         # The plugin's own history leaves its changes out for anyone without view_checklists.

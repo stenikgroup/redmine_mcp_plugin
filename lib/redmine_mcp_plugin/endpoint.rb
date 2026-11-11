@@ -33,6 +33,17 @@ module RedmineMcpPlugin
         end
       end
 
+      # A keyword the validator does not enforce is served to clients and
+      # checked by nobody. The tool still works, so it is said and not refused.
+      def warn_unenforced(tools)
+        tools.each do |tool|
+          unsupported = SchemaValidator.unsupported(tool.mcp_schema)
+          next if unsupported.empty?
+
+          Rails.logger.warn("[redmine_mcp_plugin] #{tool.mcp_name} declares what /mcp does not enforce: #{unsupported.join(', ')}")
+        end
+      end
+
       def checked(tools, served)
         unless tools.is_a?(Array) && tools.all? { |tool| tool.is_a?(Class) && tool < Tool && tool.mcp_name.present? }
           raise ArgumentError, 'the block must return a list of RedmineMcpPlugin::Tool subclasses'
@@ -46,6 +57,7 @@ module RedmineMcpPlugin
                                             .map(&:to_sym).uniq.reject { |scope| Redmine::AccessControl.permission(scope) }
         raise ArgumentError, "#{unknown.join(', ')} is not a Redmine permission" if unknown.any?
 
+        warn_unenforced(tools)
         tools
       end
     end

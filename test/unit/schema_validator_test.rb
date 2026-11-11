@@ -153,11 +153,74 @@ class RedmineMcpPluginSchemaValidatorTest < ActiveSupport::TestCase
     assert_equal 'flag must be true or false, got "yes"', assert_raises(E) { V.validate!(schema, { 'flag' => 'yes' }) }.message
   end
 
-  # A type the validator does not know is left to the tool, and named as it is.
-  def test_a_type_it_does_not_check_passes
+  def test_arrays_and_objects_are_enforced
     schema = { 'properties' => { 'filters' => { 'type' => 'object' }, 'ids' => { 'type' => 'array' } } }
-    assert_nothing_raised { V.validate!(schema, { 'filters' => 'anything', 'ids' => 3 }) }
-    assert_equal 'array', V.name_types(%w[array])
+
+    assert_nothing_raised { V.validate!(schema, { 'filters' => { 'a' => 1 }, 'ids' => [] }) }
+    assert_equal 'ids must be an array, got 3', assert_raises(E) { V.validate!(schema, { 'ids' => 3 }) }.message
+    assert_equal 'ids must be an array, got an object', assert_raises(E) { V.validate!(schema, { 'ids' => {} }) }.message
+    assert_equal 'filters must be an object, got "anything"',
+                 assert_raises(E) { V.validate!(schema, { 'filters' => 'anything' }) }.message
+    assert_equal 'filters must be an object, got an array', assert_raises(E) { V.validate!(schema, { 'filters' => [] }) }.message
+  end
+
+  def test_items_are_checked_one_by_one
+    schema = { 'properties' => { 'ids' => { 'type' => 'array', 'items' => { 'type' => %w[integer string] } },
+                                 'kinds' => { 'type' => 'array', 'items' => { 'type' => 'string', 'enum' => %w[a b] } } } }
+
+    assert_nothing_raised { V.validate!(schema, { 'ids' => [1, '2', 'me'], 'kinds' => %w[a b] }) }
+    assert_equal 'ids[1] must be an integer or a string, got an object',
+                 assert_raises(E) { V.validate!(schema, { 'ids' => [1, {}] }) }.message
+    assert_equal 'ids[0] must not be null', assert_raises(E) { V.validate!(schema, { 'ids' => [nil] }) }.message
+    assert_equal 'kinds[1] must be one of a, b, got "c"', assert_raises(E) { V.validate!(schema, { 'kinds' => %w[a c] }) }.message
+    assert_match 'kinds[0] contains a control character',
+                 assert_raises(E) { V.validate!(schema, { 'kinds' => ["a\u0000"] }) }.message
+  end
+
+  # A type the validator does not know is left to the tool, and named as it is.
+  def test_a_type_it_does_not_know_passes_and_is_reported
+    schema = { 'properties' => { 'when' => { 'type' => 'timestamp' } } }
+    assert_nothing_raised { V.validate!(schema, { 'when' => 3 }) }
+    assert_equal 'timestamp', V.name_types(%w[timestamp])
+    assert_equal ['when: type timestamp'], V.unsupported(schema)
+  end
+
+  # --- what a schema promises and nobody checks --------------------------------
+
+  def test_unsupported_names_every_keyword_that_is_not_enforced
+    schema = { 'type' => 'object', 'minProperties' => 1,
+               'properties' => {
+                 'limit' => { 'type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'description' => 'ok', 'format' => 'int32' },
+                 'tags' => { 'type' => 'array', 'items' => { 'type' => 'string', 'pattern' => 'x', 'enum' => %w[a] } },
+                 'kind' => { 'type' => %w[string decimal] },
+                 'ids' => { 'type' => 'array', 'items' => { 'type' => 'uuid' } }
+               } }
+
+    assert_equal ['schema: minProperties', 'limit: maximum', 'tags: items.pattern', 'kind: type decimal', 'ids: items: type uuid'],
+                 V.unsupported(schema)
+    assert_equal [], V.unsupported(SCHEMA)
+    assert_equal [], V.unsupported(nil)
+  end
+
+  # The schema served to clients is a promise. Every built-in tool may only
+  # declare what this file enforces, and an array says what it holds.
+  def test_no_built_in_tool_declares_what_is_not_enforced
+    built_in = RedmineMcpPlugin::Registry.all
+    built_in.each do |tool|
+      schema     = tool.mcp_schema
+      properties = schema['properties'] || {}
+
+      assert_equal [], V.unsupported(schema), tool.mcp_name
+      assert_equal 'object', schema['type'], tool.mcp_name
+      assert_equal false, schema['additionalProperties'], "#{tool.mcp_name} must refuse unknown arguments"
+      assert_empty Array(schema['required']) - properties.keys, "#{tool.mcp_name} requires an argument it does not declare"
+      properties.each do |name, spec|
+        assert spec['type'].present?, "#{tool.mcp_name}.#{name} declares no type"
+        next unless Array(spec['type']).include?('array')
+
+        assert spec['items'].present?, "#{tool.mcp_name}.#{name} is an array and does not say of what"
+      end
+    end
   end
 
   def test_numbers_are_recognised_and_coerced

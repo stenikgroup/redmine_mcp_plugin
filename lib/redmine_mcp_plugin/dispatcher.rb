@@ -122,7 +122,10 @@ module RedmineMcpPlugin
       payload = tool_class.new(user, auth).call(arguments.to_h)
 
       {
-        content: [{ type: 'text', text: JSON.pretty_generate(payload) }],
+        # The same payload twice: structuredContent for a client that reads it,
+        # text for one that does not, and that copy is what most clients hand
+        # the model. Compact, since indentation there is only tokens.
+        content: [{ type: 'text', text: JSON.generate(payload) }],
         structuredContent: payload,
         isError: false
       }

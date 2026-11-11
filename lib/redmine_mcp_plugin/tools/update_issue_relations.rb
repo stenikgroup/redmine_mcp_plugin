@@ -13,11 +13,12 @@ module RedmineMcpPlugin
              'type' => 'object',
              'properties' => {
                'issue' => { 'type' => 'integer', 'description' => 'Issue id.' },
-               'add' => { 'type' => 'array',
+               'add' => { 'type' => 'array', 'items' => { 'type' => 'object' },
                           'description' => '[{"issue": id, "relation_type": type, "delay": days}], seen from issue. ' \
                                            'Types: relates, duplicates, duplicated, blocks, blocked, precedes, follows, ' \
                                            'copied_to, copied_from. delay only with precedes, follows.' },
-               'remove' => { 'type' => 'array', 'description' => 'Ids of related issues; every relation with each is removed.' }
+               'remove' => { 'type' => 'array', 'items' => { 'type' => %w[integer string] },
+                             'description' => 'Ids of related issues; every relation with each is removed.' }
              },
              'required' => %w[issue],
              'additionalProperties' => false

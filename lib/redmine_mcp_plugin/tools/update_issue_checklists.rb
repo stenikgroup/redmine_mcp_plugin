@@ -17,10 +17,10 @@ module RedmineMcpPlugin
              'type' => 'object',
              'properties' => {
                'issue' => { 'type' => 'integer', 'description' => 'Issue id.' },
-               'add' => { 'type' => 'array', 'description' => 'Subjects of new items.' },
-               'done' => { 'type' => 'array', 'description' => 'Checklist ids to tick.' },
-               'undone' => { 'type' => 'array', 'description' => 'Checklist ids to untick.' },
-               'rename' => { 'type' => 'array', 'description' => '[{"checklist": id, "subject": text}]' }
+               'add' => { 'type' => 'array', 'items' => { 'type' => 'string' }, 'description' => 'Subjects of new items.' },
+               'done' => { 'type' => 'array', 'items' => { 'type' => %w[integer string] }, 'description' => 'Checklist ids to tick.' },
+               'undone' => { 'type' => 'array', 'items' => { 'type' => %w[integer string] }, 'description' => 'Checklist ids to untick.' },
+               'rename' => { 'type' => 'array', 'items' => { 'type' => 'object' }, 'description' => '[{"checklist": id, "subject": text}]' }
              },
              'required' => %w[issue],
              'additionalProperties' => false

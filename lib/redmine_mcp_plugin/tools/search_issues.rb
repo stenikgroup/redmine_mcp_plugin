@@ -86,10 +86,6 @@ module RedmineMcpPlugin
         # .visible honours roles but not OAuth scopes; this honours the token.
         authorize!(:view_issues, project) if project
 
-        # base_scope reads User.current rather than this tool's user; the
-        # controller sets them to the same object, so assert it rather than trust it.
-        raise ToolError, 'You do not have permission to do that' unless User.current == user
-
         saved = arguments['query'].present?
         query = build_query(arguments, project)
         return describe(query, arguments['describe']) if arguments['describe']

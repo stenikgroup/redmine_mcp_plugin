@@ -138,4 +138,17 @@ class RedmineMcpPluginEndpointTest < ActiveSupport::TestCase
     assert_includes E.tools, current
     assert_not_includes E.tools, old
   end
+
+  # A keyword the validator does not enforce is served and checked by nobody:
+  # the tool is kept, and the log says what it promises in vain.
+  def test_a_schema_keyword_that_is_not_enforced_is_logged_and_the_tool_kept
+    loose = Class.new(RedmineMcpPlugin::Tool) do
+      tool 'probe_loose', title: 'Probe', description: 'A test tool.',
+                          schema: { 'type' => 'object', 'properties' => { 'limit' => { 'type' => 'integer', 'maximum' => 10 } } }
+    end
+    add('probe_plugin') { [loose] }
+
+    log = log_of { assert_includes E.tools, loose }
+    assert_match 'probe_loose declares what /mcp does not enforce: limit: maximum', log
+  end
 end

@@ -5,7 +5,8 @@ require File.expand_path('../test_helper', __dir__)
 # The dispatcher without the HTTP layer: the methods it answers, and the two
 # tiers of error a tool call can end in.
 class RedmineMcpPluginDispatcherTest < ActiveSupport::TestCase
-  fixtures :users, :roles, :members, :member_roles, :projects, :enabled_modules
+  fixtures :users, :email_addresses, :roles, :members, :member_roles, :projects, :enabled_modules,
+           :issues, :issue_statuses, :trackers, :enumerations, :projects_trackers
 
   J = RedmineMcpPlugin::JsonRpc
 
@@ -129,5 +130,66 @@ class RedmineMcpPluginDispatcherTest < ActiveSupport::TestCase
 
   def test_a_tool_without_perform_says_so
     assert_raises(NotImplementedError) { Unfinished.new(@user).call({}) }
+  end
+
+  # Indentation in the text copy is only tokens for the model that reads it.
+  def test_the_text_copy_is_compact_json
+    text = call('tools/call', { 'name' => 'list_projects', 'arguments' => { 'limit' => 2 } })[:result][:content].first[:text]
+
+    assert_not_includes text, "\n"
+    assert_not_includes text, '": '
+    assert_equal 2, JSON.parse(text)['returned']
+  end
+
+  # --- one acting user -----------------------------------------------------------
+
+  # Core reads User.current in places a tool cannot pass a user to: the base
+  # scope of a query, the history helper. A tool sets it for its own call.
+  def test_a_tool_acts_as_its_user_whoever_is_current
+    User.current = nil
+    seen   = nil
+    probe  = Class.new(RedmineMcpPlugin::Tool) do
+      tool 'probe_current', title: 'Probe', description: 'Reports User.current.', schema: { 'type' => 'object', 'properties' => {} }
+      define_method(:perform) { |_arguments| seen = User.current }
+      private :perform
+    end
+    probe.new(@user).call({})
+
+    assert_equal @user, seen
+    assert_equal User.anonymous, User.current
+  end
+
+  def test_a_query_tool_called_for_another_user_answers_for_that_user
+    User.current = User.find(1)
+    other = User.find(7)
+
+    result = RedmineMcpPlugin::Tools::SearchIssues.new(other).call({ 'status' => 'all', 'limit' => 100 })
+    ids    = result[:issues].map { |row| row[:id] }
+
+    assert_equal Issue.visible(other).where(id: ids).pluck(:id).sort, ids.sort
+    assert_operator Issue.visible(User.find(1)).count, :>, result[:total_count]
+    assert_equal User.find(1), User.current
+  end
+
+  def test_the_current_user_is_put_back_when_a_tool_raises
+    User.current = User.find(1)
+
+    assert_raises(RedmineMcpPlugin::ToolError) do
+      RedmineMcpPlugin::Tools::GetIssue.new(@user).call({ 'issue' => 999_999 })
+    end
+    assert_equal User.find(1), User.current
+  end
+
+  def test_a_tool_knows_how_its_user_authenticated
+    token = RedmineMcpPlugin::Tools::WhoAmI.new(@user, { mode: :oauth2, scopes: %i[view_issues] })
+    key   = RedmineMcpPlugin::Tools::WhoAmI.new(@user, { mode: :api_key })
+    bare  = RedmineMcpPlugin::Tools::WhoAmI.new(@user, nil)
+
+    assert token.oauth?
+    assert_equal :oauth2, token.auth_mode
+    assert_equal %i[view_issues], token.oauth_scopes
+    assert_not key.oauth?
+    assert_nil key.oauth_scopes
+    assert_nil bare.auth_mode
   end
 end

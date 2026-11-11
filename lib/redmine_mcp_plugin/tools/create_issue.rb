@@ -35,8 +35,8 @@ module RedmineMcpPlugin
                'done_ratio' => { 'type' => 'integer' },
                'estimated_hours' => { 'type' => 'number' },
                'is_private' => { 'type' => 'boolean' },
-               'watcher_users' => { 'type' => 'array', 'description' => 'User or group ids, or "me".' },
-               'tag_list' => { 'type' => 'array', 'description' => 'Tag names.' },
+               'watcher_users' => { 'type' => 'array', 'items' => { 'type' => %w[integer string] }, 'description' => 'User or group ids, or "me".' },
+               'tag_list' => { 'type' => 'array', 'items' => { 'type' => 'string' }, 'description' => 'Tag names.' },
                'custom_field_values' => { 'type' => 'object',
                                           'description' => 'By field id from get_issue_fields; a value, or its label ' \
                                                           'when it names one value.' }

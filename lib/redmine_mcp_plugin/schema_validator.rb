@@ -12,11 +12,20 @@ module RedmineMcpPlugin
   # here, once, before #perform sees the arguments.
   #
   # Not a JSON Schema implementation: it covers the keywords these tools
-  # actually declare, listed in ENFORCED. Adding a keyword to a tool schema
-  # without teaching it to this file leaves that keyword unenforced, so keep the
-  # two in step.
+  # actually declare, listed in ENFORCED. A keyword outside it would be served
+  # to clients and checked by nobody, so #unsupported names every such keyword
+  # in a schema: the test suite runs it over each built-in tool, and the
+  # endpoint logs what it finds in the tools other plugins add.
   module SchemaValidator
-    ENFORCED = %w[type enum minimum required additionalProperties].freeze
+    ENFORCED = %w[type enum minimum required additionalProperties items].freeze
+    # Read by the client and never checked here: they promise nothing.
+    ANNOTATIONS = %w[description format].freeze
+    TYPES = %w[string integer number boolean array object].freeze
+    # An object's own members are not walked: the tool that takes one checks
+    # its shape and says what it expects, as custom_field_values does.
+    SCHEMA_KEYS   = %w[type properties required additionalProperties].freeze
+    PROPERTY_KEYS = (%w[type enum minimum items] + ANNOTATIONS).freeze
+    ITEM_KEYS     = (%w[type enum] + ANNOTATIONS).freeze
 
     # Rails will not round-trip a NUL through a bind parameter -- PostgreSQL
     # rejects it outright, and the exception surfaced as -32603 Internal error,
@@ -42,7 +51,30 @@ module RedmineMcpPlugin
         check_type!(key, spec['type'], value)
         check_enum!(key, spec['enum'], value)
         check_minimum!(key, spec['minimum'], value)
+        check_items!(key, spec['items'], value)
       end
+    end
+
+    # What a schema declares that this file does not enforce, as readable
+    # paths: "limit: maximum", "tags: items.pattern", "status: type whatever".
+    # Empty when the schema promises only what is checked.
+    def unsupported(schema)
+      return [] if schema.blank?
+
+      found = (schema.keys - SCHEMA_KEYS).map { |keyword| "schema: #{keyword}" }
+      (schema['properties'] || {}).each do |name, spec|
+        found.concat((spec.keys - PROPERTY_KEYS).map { |keyword| "#{name}: #{keyword}" })
+        found.concat(unknown_types(name, spec['type']))
+        next unless spec['items']
+
+        found.concat((spec['items'].keys - ITEM_KEYS).map { |keyword| "#{name}: items.#{keyword}" })
+        found.concat(unknown_types("#{name}: items", spec['items']['type']))
+      end
+      found
+    end
+
+    def unknown_types(name, type)
+      (Array(type) - TYPES).map { |unknown| "#{name}: type #{unknown}" }
     end
 
     # Returns arguments with declared scalars converted to real Ruby types.
@@ -126,6 +158,8 @@ module RedmineMcpPlugin
       when 'integer' then integerish?(value)
       when 'number'  then numeric?(value)
       when 'boolean' then booleanish?(value)
+      when 'array'   then value.is_a?(Array)
+      when 'object'  then value.is_a?(Hash)
       else true
       end
     end
@@ -137,6 +171,8 @@ module RedmineMcpPlugin
         when 'integer' then 'an integer'
         when 'number'  then 'a number'
         when 'boolean' then 'true or false'
+        when 'array'   then 'an array'
+        when 'object'  then 'an object'
         else type.to_s
         end
       end.join(' or ')
@@ -149,6 +185,21 @@ module RedmineMcpPlugin
       # Case is not forgiven on purpose. Quietly accepting "Closed" for "closed"
       # is precisely how the original bug read to a caller: like success.
       raise ToolError, "#{key} must be one of #{allowed.join(', ')}, got #{value.inspect}"
+    end
+
+    # Each element against the type and the enum `items` declares. An element
+    # that is itself an object is the tool's to check.
+    def check_items!(key, items, value)
+      return if items.blank? || !value.is_a?(Array)
+
+      value.each_with_index do |element, index|
+        name = "#{key}[#{index}]"
+        raise ToolError, "#{name} must not be null" if element.nil?
+
+        check_control_characters!(name, element)
+        check_type!(name, items['type'], element)
+        check_enum!(name, items['enum'], element)
+      end
     end
 
     def check_minimum!(key, minimum, value)

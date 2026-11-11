@@ -28,10 +28,11 @@ module RedmineMcpPlugin
                'is_public' => { 'type' => 'boolean',
                                 'description' => 'Public projects are readable by every user, and by anonymous ' \
                                                  'visitors where the instance allows them.' },
-               'enabled_modules' => { 'type' => 'array',
+               'enabled_modules' => { 'type' => 'array', 'items' => { 'type' => 'string' },
                                       'description' => 'Module names, replacing the list: issue_tracking, time_tracking, ' \
                                                        'news, documents, files, wiki, repository, boards, calendar, gantt.' },
-               'trackers' => { 'type' => 'array', 'description' => 'Tracker names from list_enumerations, replacing the list.' },
+               'trackers' => { 'type' => 'array', 'items' => { 'type' => %w[string integer] },
+                               'description' => 'Tracker names from list_enumerations, replacing the list.' },
                'inherit_members' => { 'type' => 'boolean', 'description' => 'Inherit the members of the parent project.' },
                'custom_field_values' => { 'type' => 'object',
                                           'description' => 'By field id from get_project; a value, or its label when ' \

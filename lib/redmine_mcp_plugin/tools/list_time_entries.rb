@@ -61,9 +61,6 @@ module RedmineMcpPlugin
       def perform(arguments)
         project = arguments['project'].present? ? fetch_project(arguments['project']) : nil
 
-        # base_scope reads User.current rather than this tool's user.
-        raise ToolError, 'You do not have permission to do that' unless User.current == user
-
         # The issue decides the scope, so it has to be resolved before the query
         # is built. describe reads no entries and needs none.
         issue = fetch_issue(arguments['issue']) if arguments['issue'].present? && !arguments['describe']
