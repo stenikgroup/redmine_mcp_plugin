@@ -38,6 +38,7 @@ end
 # Doorkeeper is configured in a to_prepare block registered after the one that loads this file,
 # so its controllers must not be touched before after_initialize.
 Rails.application.config.after_initialize { RedmineMcpPlugin::DoorkeeperUrlOptions.apply }
+Rails.application.config.after_initialize { RedmineMcpPlugin::DoorkeeperScopeNarrowing.apply }
 
 # Every plugin has loaded by now: the tools others added are checked, and a refusal logged, at boot.
 Rails.application.config.after_initialize { RedmineMcpPlugin::Endpoint.tools }
