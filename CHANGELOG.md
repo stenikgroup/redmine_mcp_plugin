@@ -52,6 +52,12 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 - The test suite runs in CI, on GitHub Actions: Redmine 6.1.0, `6.1-stable`, `7.0-stable` and trunk,
   on each Ruby they accept, from 3.2 to 4.0, on every pull request and once a week.
   `test/docker/Dockerfile` builds one cell of that matrix to run it locally.
+- CI also runs RuboCop, with Redmine's own gems, and measures the line coverage of the plugin, which
+  must stay above 95%. `test/coverage.rb` prints it per file. The suite went from 207 to 342 tests
+  and from 85% to 97% of the lines: every tool is now called at least once, the HTTP Basic and
+  session modes, the discovery documents and `Endpoint.add_tools` have their own tests, and what
+  stays uncovered is the support of `redmine_checklists` and `redmineup_tags`, which the test images
+  do not install.
 
 ### Changed
 

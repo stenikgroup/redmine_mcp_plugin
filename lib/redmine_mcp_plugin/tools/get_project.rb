@@ -12,7 +12,7 @@ module RedmineMcpPlugin
              'type' => 'object',
              'properties' => {
                'project' => { 'type' => %w[string integer],
-                             'description' => 'Project identifier or numeric id.' }
+                              'description' => 'Project identifier or numeric id.' }
              },
              'required' => %w[project],
              'additionalProperties' => false

@@ -91,7 +91,7 @@ module RedmineMcpPlugin
       # inside the transaction, so one item that did not take rolls everything back.
       def refuse_untaken!(issue, change, adds, before)
         after   = Checklist.where(issue_id: issue.id).to_a
-        by_id   = after.to_h { |item| [item.id, item] }
+        by_id   = after.index_by { |item| item.id }
         untaken = change.values.filter_map do |attrs|
           item = by_id[attrs['id']]
           next "#{attrs['id']} is gone" if item.nil?

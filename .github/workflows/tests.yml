@@ -85,13 +85,75 @@ jobs:
       - name: Run the plugin tests
         run: bin/rails redmine:plugins:test NAME=redmine_mcp_plugin
 
+  # RuboCop and line coverage, on one Redmine: both come from that Redmine's
+  # own Gemfile, and neither says more when repeated across the matrix.
+  quality:
+    name: Lint and coverage
+    runs-on: ubuntu-latest
+
+    env:
+      RAILS_ENV: test
+      BUNDLE_WITHOUT: development
+      # Below this the build fails. The lines left out are the support of
+      # redmine_checklists and redmineup_tags, which are not installed here,
+      # and a few rescues of failures that cannot be provoked.
+      MINIMUM_COVERAGE: 95
+
+    steps:
+      - name: Check out Redmine 7.0-stable
+        uses: actions/checkout@v6
+        with:
+          repository: redmine/redmine
+          ref: 7.0-stable
+
+      - name: Check out the plugin
+        uses: actions/checkout@v6
+        with:
+          path: plugins/redmine_mcp_plugin
+
+      - name: Configure the test database
+        run: |
+          cat > config/database.yml <<EOF
+          test:
+            adapter: sqlite3
+            database: db/redmine_test.sqlite3
+          EOF
+
+      - name: Hold minitest at 5.x where Redmine does not
+        run: grep -q "gem 'minitest'" Gemfile || echo "gem 'minitest', '~> 5.27'" > Gemfile.local
+
+      - name: Install Ruby 3.3 and the gems
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      # The configuration and the paths are named: Redmine's root configuration
+      # excludes plugins/, and a bare run would inspect nothing and pass.
+      - name: RuboCop
+        working-directory: plugins/redmine_mcp_plugin
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/Gemfile
+        run: bundle exec rubocop -c .rubocop.yml app config lib test init.rb
+
+      - name: Migrate
+        run: bin/rails db:migrate redmine:plugins:migrate
+
+      - name: Run the plugin tests with coverage
+        env:
+          COVERAGE: '1'
+        run: bin/rails redmine:plugins:test NAME=redmine_mcp_plugin
+
+      - name: Line coverage of the plugin
+        run: ruby plugins/redmine_mcp_plugin/test/coverage.rb "$MINIMUM_COVERAGE"
+
   # The one check main requires: branch protection names this job instead of
-  # the matrix cells, so the matrix can change without touching the settings.
+  # the jobs above, so they can change without touching the settings.
   passed:
     name: Tests passed
     if: always()
-    needs: test
+    needs: [test, quality]
     runs-on: ubuntu-latest
     steps:
-      - name: Fail unless every matrix job succeeded
-        run: test "${{ needs.test.result }}" = "success"
+      - name: Fail unless every job succeeded
+        run: test "${{ needs.test.result }}" = "success" && test "${{ needs.quality.result }}" = "success"

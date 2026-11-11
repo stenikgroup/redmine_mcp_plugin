@@ -32,6 +32,7 @@ module RedmineMcpPlugin
         id     = user_id_from(arguments['principal'], 'principal')
         member = project.memberships.find_by(user_id: id)
         raise ToolError, "#{id} is not a member of #{project.identifier}" if member.nil?
+
         # Core's rule, which its API reports as a bare 422.
         unless member.deletable?(user)
           cause = member.any_inherited_role? ? 'a role is inherited from a group or the parent project' : 'you may not manage every role they hold'

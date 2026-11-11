@@ -10,7 +10,7 @@ module RedmineMcpPlugin
   # agreed version in the MCP-Protocol-Version header. Shipped clients still do
   # this, so both paths are served.
   module Protocol
-    META_SERVER_INFO_KEY  = 'io.modelcontextprotocol/serverInfo'
+    META_SERVER_INFO_KEY = 'io.modelcontextprotocol/serverInfo'
     ICON_PATH = File.expand_path('../../assets/icon.png', __dir__)
 
     # Embedded, because the firewall admits the client only on /mcp, /.well-known and /oauth,

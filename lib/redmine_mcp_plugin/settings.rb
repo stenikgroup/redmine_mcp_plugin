@@ -64,7 +64,7 @@ module RedmineMcpPlugin
       def bool(key)
         value = all[key]
         case value
-        when true  then true
+        when true then true
         when false, nil then false
         else %w[1 true yes on].include?(value.to_s.strip.downcase)
         end

@@ -29,7 +29,7 @@ module RedmineMcpPlugin
                            'description' => 'User id from list_users, or "me" (the default). Someone else needs the ' \
                                             'permission to log time for other users.' },
                'custom_field_values' => { 'type' => 'object',
-                                         'description' => 'By field id from list_enumerations with the project; ' \
+                                          'description' => 'By field id from list_enumerations with the project; ' \
                                                           'a value, or its label when it names one value.' }
              },
              'required' => %w[hours activity],

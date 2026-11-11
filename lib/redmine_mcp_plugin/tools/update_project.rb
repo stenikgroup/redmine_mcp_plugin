@@ -34,7 +34,7 @@ module RedmineMcpPlugin
                'trackers' => { 'type' => 'array', 'description' => 'Tracker names from list_enumerations, replacing the list.' },
                'inherit_members' => { 'type' => 'boolean', 'description' => 'Inherit the members of the parent project.' },
                'custom_field_values' => { 'type' => 'object',
-                                         'description' => 'By field id from get_project; a value, or its label when ' \
+                                          'description' => 'By field id from get_project; a value, or its label when ' \
                                                           'it names one value.' }
              },
              'required' => %w[project],

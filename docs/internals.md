@@ -78,9 +78,11 @@ on every push to `main` and once a week, on each Ruby that each Redmine ref acce
 | `7.0-stable` | 8.1 | 3.2, 3.3, 3.4, 4.0 |
 | `master` (trunk) | 8.1 | 3.3, 3.4, 4.0 |
 
-Rails is not an axis of its own: each Redmine ref pins one exact version. A last job, `Tests passed`,
-succeeds only when every cell does: it is the one check `main` requires, so the matrix can change
-without touching the branch protection. The weekly run is there
+Rails is not an axis of its own: each Redmine ref pins one exact version. A job beside the matrix,
+`Lint and coverage`, runs RuboCop and measures the line coverage of the plugin on `7.0-stable`, and
+fails below the minimum set in the workflow. A last job, `Tests passed`, succeeds only when every
+cell and that job do: it is the one check `main` requires, so the jobs can change without touching
+the branch protection. The weekly run is there
 because trunk and the stable branches move without a commit here, and a core removal reaches trunk
 before any release.
 
@@ -101,3 +103,25 @@ docker run --rm -v "$PWD":/redmine/plugins/redmine_mcp_plugin redmine-mcp-test:m
 image holds the Redmine sources as they were when it was built: rebuild with `--no-cache` to follow
 a branch. To run one file, append the command:
 `bin/rails test plugins/redmine_mcp_plugin/test/unit/protocol_test.rb`.
+
+**Coverage.** Redmine's test helper writes a coverage report when `COVERAGE` is set, for the whole
+application; [`test/coverage.rb`](../test/coverage.rb) reads the plugin's share of it, lists the
+files that are not fully covered, and takes an optional minimum:
+
+```bash
+docker run --rm -e COVERAGE=1 -v "$PWD":/redmine/plugins/redmine_mcp_plugin redmine-mcp-test:master-ruby4.0 sh -c 'bin/rails redmine:plugins:test NAME=redmine_mcp_plugin && ruby plugins/redmine_mcp_plugin/test/coverage.rb 95'
+```
+
+What stays uncovered is the support of `redmine_checklists` and `redmineup_tags`: neither plugin is
+installed in the test images, so their code paths never run.
+
+**RuboCop.** The gems are Redmine's own. The configuration and the paths are named because Redmine's
+root configuration excludes `plugins/`: without them RuboCop inspects no file and reports nothing.
+
+```bash
+docker run --rm -e BUNDLE_GEMFILE=/redmine/Gemfile -w /redmine/plugins/redmine_mcp_plugin -v "$PWD":/redmine/plugins/redmine_mcp_plugin redmine-mcp-test:master-ruby4.0 bundle exec rubocop -c .rubocop.yml app config lib test init.rb
+```
+
+[`.rubocop_todo.yml`](../.rubocop_todo.yml) lists what the code did not meet when the linter was
+added, the size of the `Tool` base class above all. It is a ratchet: an offense it does not list
+fails the build.

@@ -88,11 +88,11 @@ class McpMetadataController < ApplicationController
     # Only what this server's tools declare or check. Advertising every scope
     # Doorkeeper knows would have a client request ~200, `admin` among them.
     scopes = RedmineMcpPlugin::Endpoint.tools
-                                         .select(&:installed?)
-                                         .reject { |tool| tool.write? && RedmineMcpPlugin::Settings.read_only? }
-                                         .flat_map { |tool| tool.mcp_permissions + tool.mcp_scopes }
-                                         .map(&:to_s)
-                                         .uniq
+                                       .select(&:installed?)
+                                       .reject { |tool| tool.write? && RedmineMcpPlugin::Settings.read_only? }
+                                       .flat_map { |tool| tool.mcp_permissions + tool.mcp_scopes }
+                                       .map(&:to_s)
+                                       .uniq
 
     # Intersected with what Doorkeeper accepts, so a permission renamed by a
     # plugin cannot put an unconsentable scope in the document.

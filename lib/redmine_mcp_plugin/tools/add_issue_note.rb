@@ -17,7 +17,7 @@ module RedmineMcpPlugin
                'issue' => { 'type' => 'integer', 'description' => 'Issue id.' },
                'notes' => { 'type' => 'string', 'description' => 'The note text.' },
                'private_notes' => { 'type' => 'boolean',
-                              'description' => 'Mark the note private. Requires the set_notes_private permission.' }
+                                    'description' => 'Mark the note private. Requires the set_notes_private permission.' }
              },
              'required' => %w[issue notes],
              'additionalProperties' => false

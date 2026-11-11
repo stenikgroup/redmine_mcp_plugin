@@ -25,7 +25,7 @@ module RedmineMcpPlugin
                'default_project_version' => { 'type' => 'boolean',
                                               'description' => 'Make it the target version of new issues in the project.' },
                'custom_field_values' => { 'type' => 'object',
-                                         'description' => 'By field id; a value, or its label when it names one value.' }
+                                          'description' => 'By field id; a value, or its label when it names one value.' }
              },
              'required' => %w[project name],
              'additionalProperties' => false

@@ -32,6 +32,7 @@ module RedmineMcpPlugin
       def perform(arguments)
         journal = fetch_journal(arguments['journal'])
         raise ToolError, 'This journal has no note to edit; it records field changes only' if journal.notes.blank?
+
         # Core's rule: edit_issue_notes for anyone's note, edit_own_issue_notes for one's own.
         unless journal.editable_by?(user)
           own = journal.user_id == user.id
