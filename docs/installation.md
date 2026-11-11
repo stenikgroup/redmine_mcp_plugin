@@ -22,10 +22,9 @@ both versions. The exact matrix, and how to run one cell of it locally, is in
 Beyond the suite, every tool was exercised live with version 0.2.0 on 2026-10-27, over an API key
 and over a scoped OAuth2 token, on Redmine 6.1.2 and 7.0.2 with Ruby 3.3.
 
-Be API runs this fork in production on a checkout of the `7.0-stable` branch (7.0.3 on
-2026-11-11), with Rails 8.1.4, Ruby 3.2.3 and MySQL. `7.0-stable` on Ruby 3.2 is one of the CI
-jobs; the database is not, the suite runs on SQLite only. A core removal reaches trunk before any
-release, which is why trunk is part of the weekly run.
+The plugin runs in production on a live instance of 200 users, 30 of them over MCP, with 150
+projects, 100,000 issues and 100 custom fields. A core removal reaches trunk before any release,
+which is why trunk is part of the weekly run.
 
 Before this fork, stenikgroup developed and ran the plugin on Redmine 6.1.2 with Ruby 3.3.11.
 
