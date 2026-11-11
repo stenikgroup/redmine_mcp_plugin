@@ -2,7 +2,7 @@
 
 require File.expand_path('../test_helper', __dir__)
 
-# search_issues and list_time_entries over core's queries: the named filters,
+# search_issues, list_time_entries and list_projects over core's queries: the named filters,
 # the explicit ones with their operators, sorting, grouping, and what a filter
 # may point at.
 class McpQueryToolsTest < Redmine::ControllerTest
@@ -238,5 +238,100 @@ class McpQueryToolsTest < Redmine::ControllerTest
   def test_filters_must_be_an_object
     assert_match 'filters must be an object, got "status_id=1"', refusal(call_tool('search_issues', { 'filters' => 'status_id=1' }))
     assert_match 'filters must be an object, got an array', refusal(call_tool('list_time_entries', { 'filters' => ['issue_id'] }))
+  end
+
+  # --- list_projects ------------------------------------------------------------
+
+  def project_ids(arguments = {})
+    state(call_tool('list_projects', arguments.merge('limit' => 100)))['projects'].map { |row| row['id'] }
+  end
+
+  # No filter: every visible project, closed ones included, in the project tree's order.
+  def test_list_projects_without_a_filter_lists_the_tree
+    Project.find(3).update_column(:status, Project::STATUS_CLOSED)
+    assert_equal Project.visible(User.find(2)).order(:lft).pluck(:id), project_ids
+  end
+
+  def test_list_projects_filters_by_status_and_parent
+    Project.find(3).update_column(:status, Project::STATUS_CLOSED)
+
+    assert_equal [3], project_ids('filters' => { 'status' => '5' })
+    assert_not_includes project_ids('filters' => { 'status' => '1' }), 3
+    children = Project.visible(User.find(2)).where(parent_id: 1).pluck(:id)
+    assert children.any?
+    assert_equal children.sort, project_ids('filters' => { 'parent_id' => '1' }).sort
+    assert_equal Project.visible(User.find(2)).where(parent_id: nil).pluck(:id).sort,
+                 project_ids('filters' => { 'parent_id' => { 'operator' => '!*', 'values' => [] } }).sort
+  end
+
+  def test_list_projects_filters_and_groups_by_a_custom_field
+    stable = Project.visible(User.find(2)).joins(:custom_values)
+                    .where(custom_values: { custom_field_id: 3, value: 'Stable' }).pluck(:id)
+    assert stable.any?
+    assert_equal stable.sort, project_ids('filters' => { 'cf_3' => 'Stable' }).sort
+
+    result = state(call_tool('list_projects', { 'group_by' => 'cf_3', 'limit' => 1 }))
+    assert_equal 1, result['returned']
+    assert_equal(result['total_count'], result['groups'].sum { |group| group['count'] })
+    assert_includes result['groups'].map { |group| group['group']['label'] }, 'Stable'
+  end
+
+  # name is not a core filter: the group counts must cover it all the same.
+  def test_list_projects_name_narrows_the_rows_and_the_groups
+    result = state(call_tool('list_projects', { 'name' => 'COOK', 'group_by' => 'is_public', 'filters' => { 'status' => '1' } }))
+
+    assert result['projects'].any?
+    assert(result['projects'].all? { |row| "#{row['identifier']} #{row['name']}".downcase.include?('cook') })
+    assert_equal(result['total_count'], result['groups'].sum { |group| group['count'] })
+    assert_operator result['total_count'], :<, Project.visible(User.find(2)).count
+  end
+
+  def test_list_projects_sorts
+    names = ->(sort) { state(call_tool('list_projects', { 'sort' => sort, 'limit' => 100 }))['projects'].map { |row| row['id'] } }
+    by_name = Project.visible(User.find(2)).order(:name).pluck(:id)
+
+    assert_equal by_name, names.call('name:asc')
+    assert_equal by_name.reverse, names.call('name')
+    assert_match 'Cannot sort by "nope". Sortable: ', refusal(call_tool('list_projects', { 'sort' => 'nope' }))
+  end
+
+  def test_list_projects_describes_its_filters
+    all = state(call_tool('list_projects', { 'describe' => true }))
+    assert_includes all['filters'].map { |filter| filter['field'] }, 'status'
+    assert_includes all['filters'].map { |filter| filter['field'] }, 'cf_3'
+    assert_includes all['sortable'], 'name'
+    assert_includes all['groupable'], 'is_public'
+
+    assert state(call_tool('list_projects', { 'describe' => 'status' }))['values'].any?
+    parent = state(call_tool('list_projects', { 'describe' => 'parent_id' }))
+    assert_nil parent['values']
+    assert_match 'Project ids from this tool', parent['note']
+  end
+
+  def test_list_projects_refuses_a_filter_it_cannot_apply
+    hidden = Project.generate!(is_public: false)
+    assert_match 'No visible project', refusal(call_tool('list_projects', { 'filters' => { 'id' => hidden.id.to_s } }))
+    assert_match 'No visible project', refusal(call_tool('list_projects', { 'filters' => { 'parent_id' => hidden.id.to_s } }))
+    assert_match 'Unknown filter "statu". Did you mean ', refusal(call_tool('list_projects', { 'filters' => { 'statu' => '1' } }))
+    assert_match 'Operator "~" is not valid for "status"',
+                 refusal(call_tool('list_projects', { 'filters' => { 'status' => { 'operator' => '~', 'values' => ['1'] } } }))
+  end
+
+  # Redmine offers no filter on such a field; the refusal says so and how to read it.
+  def test_list_projects_names_a_custom_field_that_is_not_a_filter
+    field = ProjectCustomField.create!(name: 'Sponsor', field_format: 'string', is_filter: false)
+    text  = refusal(call_tool('list_projects', { 'filters' => { "cf_#{field.id}" => 'Acme' } }))
+    assert_match "cf_#{field.id} (Sponsor) is not \"Used as a filter\"", text
+
+    enable_mcp('excluded_custom_fields' => ['', field.id.to_s, '3'])
+    assert_match "Unknown filter \"cf_#{field.id}\"", refusal(call_tool('list_projects', { 'filters' => { "cf_#{field.id}" => 'Acme' } }))
+    assert_match 'Unknown filter "cf_3"', refusal(call_tool('list_projects', { 'filters' => { 'cf_3' => 'Stable' } }))
+    assert_match 'Cannot group by "cf_3"', refusal(call_tool('list_projects', { 'group_by' => 'cf_3' }))
+  end
+
+  def test_list_projects_keeps_custom_fields_on_filtered_rows
+    rows = state(call_tool('list_projects', { 'filters' => { 'cf_3' => 'Stable' }, 'include_custom_fields' => true }))['projects']
+    assert rows.any?
+    assert(rows.all? { |row| row['custom_fields'].any? { |field| field['id'] == 3 && field['value'] == 'Stable' } })
   end
 end
