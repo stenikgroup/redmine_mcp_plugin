@@ -71,4 +71,27 @@ class RedmineMcpPluginSettingsTest < ActiveSupport::TestCase
       assert S.any_auth_mode?
     end
   end
+
+  def test_a_setting_is_read_by_its_key
+    with_settings_hash('max_results' => '7') { assert_equal '7', S['max_results'] }
+    with_settings_hash({}) { assert_nil S['max_results'] }
+  end
+
+  def test_bool_takes_real_booleans_and_anything_else_is_false
+    with_settings_hash('enabled' => true, 'read_only' => false) do
+      assert S.enabled?
+      assert_not S.read_only?
+    end
+    with_settings_hash('enabled' => 'maybe') { assert_not S.enabled? }
+    with_settings_hash('enabled' => ' YES ') { assert S.enabled? }
+  end
+
+  # A stored value that is not a hash must not take the endpoint down.
+  def test_settings_that_are_not_a_hash_read_as_empty
+    with_settings_hash(nil) do
+      assert_equal({}, S.all)
+      assert_not S.enabled?
+      assert_equal 100, S.max_results
+    end
+  end
 end

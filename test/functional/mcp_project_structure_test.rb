@@ -24,18 +24,6 @@ class McpProjectStructureTest < Redmine::ControllerTest
     User.current = nil
   end
 
-  def state(result)
-    assert result, json_body.inspect
-    assert_not result['isError'], result.inspect
-    result['structuredContent']
-  end
-
-  def refusal(result)
-    assert result, json_body.inspect
-    assert result['isError'], result.inspect
-    result['content'].first['text']
-  end
-
   def without_permission(*permissions)
     Role.find_each { |role| permissions.each { |permission| role.remove_permission!(permission) } }
   end
@@ -50,7 +38,7 @@ class McpProjectStructureTest < Redmine::ControllerTest
     assert_equal 'launch', project['identifier']
     assert_nil project['parent_id']
     assert_equal %w[issue_tracking wiki], project['enabled_modules']
-    assert_equal ['Bug'], project['trackers'].map { |t| t['name'] }
+    assert_equal(['Bug'], project['trackers'].map { |t| t['name'] })
     assert Project.find_by(identifier: 'launch').members.exists?(user_id: 2)
   end
 
@@ -229,7 +217,7 @@ class McpProjectStructureTest < Redmine::ControllerTest
     result = state(call_tool('list_memberships', { 'project' => 'ecookbook' }))
 
     manager = result['memberships'].detect { |row| row['principal']['id'] == 2 }
-    assert_equal ['Manager'], manager['roles'].map { |role| role['name'] }
+    assert_equal(['Manager'], manager['roles'].map { |role| role['name'] })
     assert_equal false, manager['roles'].first['inherited']
     assert_includes result['manageable_roles'].map { |role| role['name'] }, 'Reporter'
 
@@ -244,7 +232,7 @@ class McpProjectStructureTest < Redmine::ControllerTest
     added = state(call_tool('update_membership', { 'project' => 'ecookbook', 'principal' => newcomer.id,
                                                    'roles' => ['reporter'] }))
     assert_equal newcomer.id, added['principal']['id']
-    assert_equal ['Reporter'], added['roles'].map { |role| role['name'] }
+    assert_equal(['Reporter'], added['roles'].map { |role| role['name'] })
 
     replaced = state(call_tool('update_membership', { 'project' => 'ecookbook', 'principal' => newcomer.id,
                                                       'roles' => [2, 'Manager'] }))
@@ -324,5 +312,28 @@ class McpProjectStructureTest < Redmine::ControllerTest
     text    = refusal(call_as(headers, 'update_project', { 'project' => 'ecookbook', 'is_public' => false })['result'])
     assert_match 'is_public (needs ', text
     assert Project.find(1).is_public?
+  end
+  # --- custom fields of a project and of a version ----------------------------
+
+  def test_update_project_sets_a_custom_field_by_its_label
+    field = ProjectCustomField.create!(name: 'Stage', field_format: 'list', possible_values: %w[Alpha Beta Stable])
+
+    updated = state(call_tool('update_project', { 'project' => 'ecookbook', 'custom_field_values' => { field.id.to_s => 'beta' } }))
+    assert_equal 'Beta', Project.find(1).custom_field_value(field)
+    assert_includes updated['custom_fields'].map { |row| row['value'] }, 'Beta'
+
+    text = refusal(call_tool('update_project', { 'project' => 'ecookbook', 'custom_field_values' => { field.id.to_s => 'Gamma' } }))
+    assert_match "custom field Stage (id #{field.id}) has no value \"Gamma\"", text
+  end
+
+  def test_update_version_sets_a_custom_field
+    field = VersionCustomField.create!(name: 'Codename', field_format: 'string')
+
+    updated = state(call_tool('update_version', { 'version' => 3, 'custom_field_values' => { field.id.to_s => 'Tiger' } }))
+    assert_equal 'Tiger', Version.find(3).custom_field_value(field)
+    assert_includes updated['custom_fields'].map { |row| row['value'] }, 'Tiger'
+
+    assert_match 'cannot be set here', refusal(call_tool('update_version', { 'version' => 3,
+                                                                             'custom_field_values' => { '999999' => 'x' } }))
   end
 end
