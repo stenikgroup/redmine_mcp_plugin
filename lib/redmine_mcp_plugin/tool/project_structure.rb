@@ -97,7 +97,8 @@ module RedmineMcpPlugin
           homepage: project.homepage,
           status: project.status,
           is_public: project.is_public?,
-          parent_id: project.parent_id,
+          # Core's API names the parent only to a caller who can see it.
+          parent_id: (project.parent_id if project.parent&.visible?(user)),
           inherit_members: project.inherit_members?,
           created_on: iso(project.created_on),
           updated_on: iso(project.updated_on),

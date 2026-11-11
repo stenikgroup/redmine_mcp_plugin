@@ -37,15 +37,23 @@ module RedmineMcpPlugin
         limit    = limit_for(arguments)
         offset   = offset_for(arguments)
         projects = scope.offset(offset).limit(limit)
+        projects = projects.preload(:custom_values) if arguments['include_custom_fields']
+        projects = projects.to_a
+        parents  = visible_parent_ids(projects)
         rows = if arguments['include_custom_fields']
-                 with_custom_fields(projects.preload(:custom_values).to_a)
+                 with_custom_fields(projects, parents)
                else
-                 projects.map { |project| summarise(project) }
+                 projects.map { |project| summarise(project, parents) }
                end
         paged(total: scope.count, offset: offset, key: :projects, rows: rows)
       end
 
-      def summarise(project)
+      # Core's API names a parent only to a caller who can see it; one query for the page.
+      def visible_parent_ids(projects)
+        Project.visible(user).where(id: projects.filter_map(&:parent_id)).pluck(:id)
+      end
+
+      def summarise(project, parents)
         {
           id: project.id,
           identifier: project.identifier,
@@ -53,7 +61,7 @@ module RedmineMcpPlugin
           description: project.description,
           status: project.status,
           is_public: project.is_public?,
-          parent_id: project.parent_id,
+          parent_id: (project.parent_id if parents.include?(project.parent_id)),
           created_on: iso(project.created_on),
           updated_on: iso(project.updated_on)
         }
@@ -62,7 +70,7 @@ module RedmineMcpPlugin
       # Project#visible_custom_field_values per row loads the field list and the
       # caller's membership once per project. The same rule runs here on data
       # loaded once for the whole page, and the labels are looked up once for it too.
-      def with_custom_fields(projects)
+      def with_custom_fields(projects, parents)
         fields = ProjectCustomField.sorted.preload(:roles).reject { |field| excluded_custom_field?(field.id) }
         roles  = fields.all? { |field| field.visible? || user.admin? } ? {} : roles_by_project(projects)
         values = projects.to_h do |project|
@@ -71,7 +79,7 @@ module RedmineMcpPlugin
         end
         labels = custom_value_labels(values.values.flatten)
         values.map do |project, stored|
-          summarise(project).merge(custom_fields: stored.map { |value| custom_field_row(value, labels) })
+          summarise(project, parents).merge(custom_fields: stored.map { |value| custom_field_row(value, labels) })
         end
       end
 

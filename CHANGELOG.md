@@ -109,6 +109,12 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `-32603 Internal error`, with a backtrace in the log.
 - `delete_project` replies `scheduled`, and `deleted` only once the project is gone. It claimed the
   deletion while core had only scheduled the background job. The tool is new in this release.
+- A filter sent with an empty `values` list, such as `{"operator": "!*", "values": []}`, is applied
+  as if `values` were left out. Core skips a filter that has no value at all, so `search_issues`
+  and `list_time_entries` answered with the unfiltered rows.
+- `get_project`, `list_projects` and the replies of the project write tools give `parent_id` only
+  when the caller can see the parent, as Redmine's REST API does. They gave the id of a private
+  parent to a caller who saw only the subproject.
 
 ### Security
 

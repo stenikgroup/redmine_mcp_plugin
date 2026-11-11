@@ -77,7 +77,9 @@ module RedmineMcpPlugin
     def operator_and_values(spec)
       return ['=', Array(spec)] unless spec.is_a?(Hash)
 
-      [spec['operator'].presence&.to_s || '=', Array(spec['values'] || '')]
+      # An empty list is no value, as when values is left out: core skips a
+      # filter that has no values at all, and the result reads as an answer.
+      [spec['operator'].presence&.to_s || '=', Array(spec['values'].presence || '')]
     end
 
     # --- records named through filters --------------------------------------

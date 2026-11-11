@@ -199,7 +199,8 @@ class McpCustomFieldsTest < Redmine::ControllerTest
     end
     queries.call(1) # warm the settings and role caches
     assert_operator Project.visible(User.find(2)).count, :>, 2
-    assert_equal queries.call(1), queries.call(100)
+    # Two rows, so both pages hold a subproject and pay the one query for the parents.
+    assert_equal queries.call(2), queries.call(100)
   end
 
   # --- custom field labels -------------------------------------------------
@@ -290,7 +291,8 @@ class McpCustomFieldsTest < Redmine::ControllerTest
     end
     queries.call(1) # warm the settings and role caches
     assert_operator Project.visible(User.find(2)).count, :>, 2
-    assert_equal queries.call(1), queries.call(100)
+    # Two rows, so both pages hold a subproject and pay the one query for the parents.
+    assert_equal queries.call(2), queries.call(100)
   end
 
   # The write tools read back the saved fields through the same row.

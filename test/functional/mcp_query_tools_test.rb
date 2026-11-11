@@ -85,6 +85,16 @@ class McpQueryToolsTest < Redmine::ControllerTest
     assert_equal [1], Issue.where(id: ids).distinct.pluck(:tracker_id)
   end
 
+  # Core skips a filter that has no value at all, and the result reads unfiltered.
+  def test_an_empty_values_list_reads_as_values_left_out
+    filter = ->(spec) { issue_ids('status' => 'all', 'filters' => { 'assigned_to_id' => spec }) }
+    unassigned = filter.call('operator' => '!*', 'values' => [])
+
+    assert unassigned.any?
+    assert_empty Issue.where(id: unassigned).where.not(assigned_to_id: nil)
+    assert_equal filter.call('operator' => '!*').sort, unassigned.sort
+  end
+
   def test_an_operator_the_filter_does_not_take_is_refused_with_the_valid_ones
     text = refusal(call_tool('search_issues', { 'filters' => { 'status_id' => { 'operator' => '~', 'values' => ['1'] } } }))
     assert_match 'Operator "~" is not valid for "status_id". Valid: ', text
