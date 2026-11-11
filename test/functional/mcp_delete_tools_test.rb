@@ -172,6 +172,26 @@ class McpDeleteToolsTest < Redmine::ControllerTest
     assert_not Attachment.exists?(added['id'])
   end
 
+  # Core's Issue#attachments_deletable? needs the issue visible as well as editable.
+  def test_delete_attachment_of_an_issue_the_caller_cannot_see_is_refused
+    Role.find(1).update!(issues_visibility: 'default')
+    issue      = Issue.generate!(project_id: 1, author: User.find(1), is_private: true)
+    attachment = Attachment.generate!(container: issue, author: User.find(1))
+    assert_not issue.visible?(User.find(2))
+
+    assert_match 'No visible attachment', refusal(call_tool('delete_attachment', { 'attachment' => attachment.id }))
+    assert Attachment.exists?(attachment.id)
+  end
+
+  def test_delete_attachment_of_an_issue_refuses_a_token_without_view_issues
+    refused = call_as('view_project edit_issues', 'delete_attachment', { 'attachment' => 1 })
+    assert_match 'No visible attachment', refusal(refused['result'])
+    assert Attachment.exists?(1)
+
+    state(call_as('view_project view_issues edit_issues', 'delete_attachment', { 'attachment' => 1 })['result'])
+    assert_not Attachment.exists?(1)
+  end
+
   def test_delete_attachment_of_a_project_file_needs_manage_files
     Role.find(1).add_permission!(:manage_files, :view_files)
     added = state(call_tool('add_file', { 'project' => 'ecookbook', 'filename' => 'notes.md', 'content' => '# Notes' }))

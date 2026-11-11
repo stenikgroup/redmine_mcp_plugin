@@ -90,6 +90,11 @@ installing or removing one of those plugins changes the advertised set the way a
 
 All five sit under Issue tracking in the application form.
 
+`search` is Redmine's own search, and its SQL decides who matches a private note from the role, not
+from the token: an issue can come back because a private note holds the searched word, for a token
+without `view_private_notes` whose user's role has that permission. The note itself is never
+returned, and Redmine's REST search answers the same token the same way.
+
 ## When the advertised set changes
 
 Several scopes gate no tool but one parameter, or one part of a reply, as the "Used by" column

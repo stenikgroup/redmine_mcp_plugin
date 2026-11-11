@@ -21,6 +21,7 @@ class McpController < ApplicationController
   before_action :require_endpoint_enabled
   before_action :verify_origin
   before_action :authenticate_mcp_request
+  before_action :verify_session_request, only: :handle
   before_action :verify_protocol_version
 
   # Core's before_actions read params ahead of handle, and Rails parses an application/json body on
@@ -105,15 +106,19 @@ class McpController < ApplicationController
            status: :forbidden
   end
 
-  # DNS-rebinding protection, which the transport spec makes a MUST.
+  # The Origin validation the transport spec makes a MUST. It keeps a foreign
+  # web page from calling the endpoint through a visitor's browser.
   #
-  # Non-browser MCP clients send no Origin header, so they are unaffected. A
-  # browser always sends one, which is what makes this an effective guard for
-  # the cookie-authenticated mode.
+  # Compared with the configured address, not request.base_url: that one is the
+  # Host header, and under DNS rebinding it carries the attacker's domain just
+  # as the Origin does, so the two would always match.
+  #
+  # Non-browser MCP clients send no Origin header, so they are unaffected. The
+  # cookie-authenticated mode must send one: see verify_session_request.
   def verify_origin
     origin = request.headers['Origin'].presence
     return if origin.nil?
-    return if origin == request.base_url
+    return if origin == RedmineMcpPlugin::PublicUrl.origin(request)
     return if RedmineMcpPlugin::Settings.allowed_origins.include?(origin)
 
     render json: { error: 'Origin not allowed' }, status: :forbidden
@@ -147,6 +152,22 @@ class McpController < ApplicationController
     @mcp_auth = { mode: result.mode, scopes: result.scopes }
   end
 
+  # The session cookie is the one credential a browser sends by itself, so it
+  # is the one a foreign page can borrow. Two things are asked of it that the
+  # token modes do not need. An Origin header, already checked by verify_origin
+  # when present: without one there is nothing to tell this Redmine's own page
+  # from another site's. And a JSON Content-Type: an HTML form can post
+  # text/plain across sites with no CORS preflight, and the body is parsed as
+  # JSON whatever its type.
+  def verify_session_request
+    return unless @mcp_auth && @mcp_auth[:mode] == :session
+    return if request.headers['Origin'].present? && request.media_type == 'application/json'
+
+    render json: { error: 'A request authenticated by the session cookie must carry an Origin header ' \
+                          'and a Content-Type of application/json' },
+           status: :forbidden
+  end
+
   # The transport requires 400 for an unsupported MCP-Protocol-Version.
   def verify_protocol_version
     header = request.headers['MCP-Protocol-Version'].presence
@@ -160,8 +181,7 @@ class McpController < ApplicationController
   end
 
   def oauth_protected_resource_url
-    base = request.base_url + (Redmine::Utils.relative_url_root.presence || '')
-    "#{base}/.well-known/oauth-protected-resource/mcp"
+    "#{RedmineMcpPlugin::PublicUrl.root(request)}/.well-known/oauth-protected-resource/mcp"
   end
 
   def render_rpc(payload, status)

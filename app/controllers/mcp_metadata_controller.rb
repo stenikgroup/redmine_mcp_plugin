@@ -69,8 +69,9 @@ class McpMetadataController < ApplicationController
     render json: { error: 'Not found' }, status: :not_found
   end
 
+  # The configured address, not the Host header: see PublicUrl.
   def root_url_without_trailing_slash
-    request.base_url + (Redmine::Utils.relative_url_root.presence || '')
+    RedmineMcpPlugin::PublicUrl.root(request)
   end
 
   def mcp_resource_url

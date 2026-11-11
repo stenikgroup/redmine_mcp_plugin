@@ -7,9 +7,9 @@ supports them.
 | Mode | Plugin default | Notes |
 |---|---|---|
 | OAuth2 | on | Per-user access tokens from Redmine's own provider. Scopes can narrow a token below the issuing user's own permissions. |
-| API key | on | The `X-Redmine-API-Key` header. Carries the user's full permissions, no scope narrowing. |
-| HTTP Basic | off | Reusable credentials on every request. Refused for accounts with 2FA active, matching core. |
-| Session cookie | off | For clients running in the browser. Origin checked. |
+| API key | on | The `X-Redmine-API-Key` header, and only the header: a `?key=` in the URL is not read, as it would stay in access logs. Carries the user's full permissions, no scope narrowing. |
+| HTTP Basic | off | Reusable credentials on every request. Refused for accounts with 2FA active, matching core. An API key as the username is taken only while the API key mode is on. |
+| Session cookie | off | For clients running in the browser. The request must be `application/json` and carry an `Origin` header that is this Redmine's or an allowed one. |
 
 Every token mode also requires the REST API to be enabled in Administration → Settings → API.
 
@@ -27,7 +27,9 @@ Two documents let a client find the authorization server without being told wher
 ```
 
 A 401 from `/mcp` carries `WWW-Authenticate: Bearer realm="Redmine", resource_metadata="..."` pointing
-at the first of those. Both are served only while the endpoint and OAuth2 mode are enabled, and 404
+at the first of those. Every URL in these documents is built from Administration → Settings →
+General → "Host name and path" and "Protocol", not from the request's `Host` header, so check that
+setting names the address clients use. Both are served only while the endpoint and OAuth2 mode are enabled, and 404
 otherwise: advertising a disabled endpoint only sends clients down a dead end.
 
 When the request presented a bearer token that is expired, revoked, unknown or owned by a locked

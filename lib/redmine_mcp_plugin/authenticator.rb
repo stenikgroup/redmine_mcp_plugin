@@ -86,8 +86,12 @@ module RedmineMcpPlugin
     #
     # Same header core accepts. Carries the user's whole permission set: there
     # is no scope to narrow it, which is why the README steers people to OAuth2.
+    #
+    # The header only. Core also reads ?key=, which leaves the key in every
+    # access log on the way, and an MCP client can always send a header. Reading
+    # params[:key] would take a "key" member of the JSON-RPC body for one too.
     def try_api_key
-      key = @request.headers['X-Redmine-API-Key'].presence || @controller.params[:key].presence
+      key = @request.headers['X-Redmine-API-Key'].presence
       return nil if key.blank?
 
       user = User.find_by_api_key(key.to_s)
@@ -116,7 +120,9 @@ module RedmineMcpPlugin
                        :unauthorized)
       end
 
-      user ||= User.find_by_api_key(username)
+      # Core's Basic also takes an API key as the username. That is the API key
+      # mode under another header, so it follows that mode's switch.
+      user ||= User.find_by_api_key(username) if Settings.api_key_auth?
       return failure('Invalid credentials', :unauthorized) unless user&.active?
       return failure('This account must change its password before it can be used', :forbidden) if user.must_change_password?
 
