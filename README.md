@@ -259,7 +259,7 @@ while read-only mode is on, which is the default.
 | Tool | Permission |
 |---|---|
 | `whoami` | none. Reports identity, auth mode and granted scopes |
-| `list_projects`, `get_project` | `view_project` |
+| `list_projects`, `get_project` | `view_project`. `list_projects` is filtered by `Project.visible` and core's `ProjectQuery`; `get_project` adds the project's custom fields the caller may see there |
 | `search_issues`, `get_issue` | `view_issues`. `get_issue` adds the attachments the caller may open (core's `Attachment#visible?`, as `get_attachment`), the subtasks the caller can see, the relations whose other issue the caller can see, the watchers under `view_issue_watchers`, the checklist under `view_checklists`, and the tags |
 | `get_attachment` | `view_issues`, through core's `Attachment#visible?`. Metadata, and the content of a text file within `file_max_size_displayed` |
 | `list_queries` | `view_issues`. Saved queries, filtered by `IssueQuery.visible` |
@@ -287,6 +287,23 @@ renamed, shown only under `view_checklists` as the plugin's own history does, an
 neither notes nor a detail the caller may see.
 `list_users` uses `Principal.visible` rather than `User.all`, which honours each role's
 `users_visibility` setting.
+
+Projects: `list_projects` is built on core's `ProjectQuery`, as `search_issues` is on `IssueQuery`, so
+`filters`, `sort` and `group_by` take what Redmine's own project list offers this user, and `describe`
+lists it. Without `filters` it lists active and closed projects, as it always did: the query's default
+"active only" filter is dropped. `name` is not core's `name` filter, since it also matches the
+identifier. Redmine filters only by the custom fields with "Used as a filter" on; another one is
+refused by name and can still be read with `custom_fields`. For a field restricted to roles, "is not"
+and "none" also match the projects where the caller cannot see the field, as in Redmine's list.
+Project custom fields follow core's `visible_custom_field_values` per project: a field the caller's
+roles do not show there is absent from that project, not empty, and an administrator over OAuth sees
+by role, since the plugin never asks for the `admin` scope. A user, version or key/value field stores an
+id, so its row carries `label` beside `value`. `get_project` reports the settings core's REST API
+does (`inherit_members`, `default_version`, `default_assigned_to`) and the
+default query when the caller may see it. `issue_custom_fields` lists only the issue custom fields
+the caller may see in that project (core's `visible_by?`, the rule of the issue page), where core's
+API lists them all. `parent` and `parent_id` are null when the caller cannot see
+the parent project, as in core's API.
 
 Parameter names follow one rule: content fields keep Redmine's attribute names (`subject`,
 `description`, `notes`, `custom_field_values`, `tag_list`, `relation_type`, `delay`); a reference to a record is Redmine's name

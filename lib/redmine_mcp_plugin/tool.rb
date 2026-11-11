@@ -808,6 +808,18 @@ module RedmineMcpPlugin
       { id: value.custom_field_id, name: value.custom_field.name, value: shown }
     end
 
+    # A user, version or key/value field stores an id, which says nothing in a
+    # report on projects, so the row carries what Redmine shows for it as well.
+    def labelled_custom_field_row(value)
+      row   = custom_field_row(value)
+      field = value.custom_field
+      return row unless field.format.is_a?(Redmine::FieldFormat::RecordList)
+
+      # One by one: core's cast of a list drops the missing and sorts the rest.
+      labels = Array(row[:value]).map { |stored| field.cast_value(stored)&.to_s }
+      row.merge(label: row[:value].is_a?(Array) ? labels : labels.first)
+    end
+
     # SchemaValidator does not walk into an object, so the shape is checked here.
     def custom_field_values_from(raw)
       return nil if raw.blank?
