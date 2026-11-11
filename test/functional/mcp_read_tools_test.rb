@@ -95,6 +95,21 @@ class McpReadToolsTest < Redmine::ControllerTest
     assert(result['projects'].all? { |row| "#{row['identifier']} #{row['name']}".downcase.include?('cook') })
   end
 
+  # Core's API names a parent only to a caller who can see it.
+  def test_projects_do_not_name_a_parent_the_caller_cannot_see
+    hidden = Project.generate!(is_public: false)
+    child  = Project.generate_with_parent!(hidden, is_public: true)
+    row    = ->(result) { state(result)['projects'].detect { |project| project['id'] == child.id } }
+
+    assert_nil row.call(call_tool('list_projects', { 'limit' => 100 }))['parent_id']
+    assert_nil row.call(call_tool('list_projects', { 'limit' => 100, 'include_custom_fields' => true }))['parent_id']
+    assert_nil state(call_tool('get_project', { 'project' => child.id }))['parent_id']
+
+    admin = User.find(1)
+    assert_equal hidden.id, row.call(call_tool('list_projects', { 'limit' => 100 }, admin))['parent_id']
+    assert_equal hidden.id, state(call_tool('get_project', { 'project' => child.id }, admin))['parent_id']
+  end
+
   def test_a_list_pages_with_offset_and_limit
     first  = state(call_tool('list_projects', { 'limit' => 1 }))
     second = state(call_tool('list_projects', { 'limit' => 1, 'offset' => 1 }))

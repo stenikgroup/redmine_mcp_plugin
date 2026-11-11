@@ -61,6 +61,11 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 
 ### Changed
 
+- `list_projects` runs core's `ProjectQuery`, as `search_issues` runs `IssueQuery`. It takes
+  `filters` on any field of Redmine's project list (status, parent, public, dates and the project
+  custom fields "Used as a filter"), `sort`, `group_by` for a count per group, and `describe` for
+  what this Redmine accepts. A custom field that is not a filter is refused by name. `name`,
+  `include_custom_fields`, the rows and the default order, the project tree, are unchanged.
 - The `Tool` base class is split. It keeps what every tool needs; the helpers of one domain are in a
   module the tool includes: `Tool::CustomFields`, `Tool::Issues`, `Tool::IssueWrites`,
   `Tool::Watchers`, `Tool::NewsItems`, `Tool::WikiPages`, `Tool::TimeEntries`,
@@ -109,6 +114,12 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `-32603 Internal error`, with a backtrace in the log.
 - `delete_project` replies `scheduled`, and `deleted` only once the project is gone. It claimed the
   deletion while core had only scheduled the background job. The tool is new in this release.
+- A filter sent with an empty `values` list, such as `{"operator": "!*", "values": []}`, is applied
+  as if `values` were left out. Core skips a filter that has no value at all, so `search_issues`
+  and `list_time_entries` answered with the unfiltered rows.
+- `get_project`, `list_projects` and the replies of the project write tools give `parent_id` only
+  when the caller can see the parent, as Redmine's REST API does. They gave the id of a private
+  parent to a caller who saw only the subproject.
 
 ### Security
 

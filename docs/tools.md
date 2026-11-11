@@ -9,7 +9,7 @@ Parameters, refusals and the behaviour shared across tools are in [tool-conventi
 
 | Tool | Permission |
 |---|---|
-| `list_projects`, `get_project` | `view_project`. Project custom fields follow core's per-role visibility: always on `get_project`, on `list_projects` with `include_custom_fields` |
+| `list_projects`, `get_project` | `view_project`. Project custom fields follow core's per-role visibility: always on `get_project`, on `list_projects` with `include_custom_fields`. `list_projects` runs core's `ProjectQuery`: `filters`, `sort` and `group_by` take the fields of Redmine's own project list, custom fields "Used as a filter" included, and `describe` lists them |
 | `list_memberships` | `view_members`. Users and groups with their roles, inherited ones marked, as core's `/projects/:id/memberships.json`; with `manage_members`, the roles the caller may give |
 | `create_project` (write) | `add_project` for a root project, `add_subprojects` on the parent for a subproject, plus `select_project_publicity` for `is_public`, `select_project_modules` for `enabled_modules` and `manage_members` for `inherit_members`. A non-administrator becomes a member with the default role, as in core |
 | `update_project` (write) | `edit_project`, plus the per-field permissions of `create_project`, and `add_subprojects` or `add_project` to move it. The identifier cannot be changed |
