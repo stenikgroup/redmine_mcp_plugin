@@ -180,7 +180,7 @@ class McpControllerTest < Redmine::ControllerTest
     assert_equal RedmineMcpPlugin::JsonRpc::METHOD_NOT_FOUND, json_body['error']['code']
   end
 
-  # --- Origin / DNS rebinding --------------------------------------------
+  # --- Origin -------------------------------------------------------------
 
   def test_foreign_origin_is_rejected
     post_mcp rpc('tools/list'), api_key_headers(User.find(2)).merge('Origin' => 'https://evil.example')
@@ -194,7 +194,7 @@ class McpControllerTest < Redmine::ControllerTest
   end
 
   # Every non-browser MCP client sends no Origin at all; they must not be
-  # caught by the rebinding guard.
+  # caught by the Origin check.
   def test_absent_origin_is_allowed
     post_mcp rpc('tools/list'), api_key_headers(User.find(2))
     assert_response :success

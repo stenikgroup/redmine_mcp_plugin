@@ -62,6 +62,30 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `edit_time_entries`, `edit_own_time_entries`, `log_time_for_other_users` and `copy_issues`; enable
   them on the MCP application.
 
+- An API key is read from the `X-Redmine-API-Key` header only. `?key=` in the URL, which left the
+  key in access logs, and a `key` member of the JSON body are no longer taken for one.
+- HTTP Basic takes an API key as the username only while the API key mode is on. Switching that
+  mode off left keys usable through Basic.
+
+### Security
+
+All rated low, found by a review of `ce5ea01`.
+
+- `delete_attachment` refuses a file of an issue the caller may not see, as core's
+  `attachments_deletable?` does. A user with `edit_issues` could delete a file of a private issue
+  hidden from them, and so could a token without `view_issues`, and read its name in the reply. The
+  tool is new in this release.
+- The `Origin` header is compared with the host name in Redmine's settings instead of the request's
+  `Host` header, which an attacker's page controls under DNS rebinding.
+- The OAuth2 discovery documents and the `resource_metadata` of the 401 challenge are built from
+  the same setting. Built from the `Host` header, a forged request got a document naming another
+  authorization server, which a cache in front of `/.well-known` could then serve to real clients.
+  **Upgrade step:** check Administration → Settings → General → "Host name and path" and "Protocol":
+  they must be the address MCP clients connect to, or the OAuth2 flow stops at discovery.
+- A request authenticated by the session cookie must carry an `Origin` header and a Content-Type of
+  `application/json`. One with no `Origin` was accepted, and a cross-site HTML form posted as
+  `text/plain` was parsed as JSON.
+
 ## [0.3.0] - 2026-11-06
 
 ### Added

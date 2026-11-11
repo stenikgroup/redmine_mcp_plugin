@@ -8,8 +8,9 @@ list results carry `ttlMs` and `cacheScope: private` because the tool set varies
 answered for those.
 
 One JSON response per POST, no SSE. JSON-RPC batching is refused rather than half processed. The
-`Origin` header is validated on every request for DNS-rebinding protection; non-browser clients send
-none and are unaffected.
+`Origin` header is validated on every request, against the host name in Redmine's settings and the
+allowed origins of the plugin, so that a foreign web page cannot call the endpoint through a
+visitor's browser. Non-browser clients send none and are unaffected.
 
 ## GET and DELETE on `/mcp`
 
@@ -22,6 +23,7 @@ it gets:
 |---|---|
 | Endpoint disabled in plugin settings | 403 |
 | `Origin` present and not allowed | 403 |
+| Session cookie on a `POST` with no `Origin`, or a body that is not `application/json` | 403 |
 | No authentication mode enabled | 503 |
 | No or invalid credential | 401, with `WWW-Authenticate` when OAuth2 mode is on |
 | Authenticated | 405 |

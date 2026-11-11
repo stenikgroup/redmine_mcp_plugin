@@ -25,8 +25,12 @@ module RedmineMcpPlugin
       def perform(arguments)
         attachment = Attachment.find_by(id: arguments['attachment'].to_i)
         container  = attachment&.container
-        # The right to delete, as core, not the right to read.
-        if container.nil? || attachment.project.nil? || !attachment.project.visible?(user)
+        # The right to delete, as core, not the right to read a file. An issue is
+        # the exception core makes: its attachments_deletable? needs the issue
+        # visible too, and Issue#visible? honours the token's view_issues scope.
+        # The same message as for a missing id, so a hidden issue is not confirmed.
+        if container.nil? || attachment.project.nil? || !attachment.project.visible?(user) ||
+           (container.is_a?(Issue) && !container.visible?(user))
           raise ToolError, "No visible attachment with id #{arguments['attachment'].inspect}"
         end
         raise ToolError, "Project #{attachment.project.identifier} is closed; reopen it first" if attachment.project.closed?
