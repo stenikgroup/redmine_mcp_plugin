@@ -15,7 +15,7 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `update_issue_category` and `update_membership`, plus `list_memberships` to read the members.
   They refuse, naming the parameter, what core drops in silence: a field the role or the token may
   not set, a parent the caller may not extend, a version `sharing` outside `allowed_sharings`, a role
-  outside the caller's managed roles. Nothing can be deleted. **Upgrade step:** with writes on, the
+  outside the caller's managed roles. **Upgrade step:** with writes on, the
   server now advertises `add_project`, `add_subprojects`, `edit_project`, `close_project`,
   `select_project_publicity`, `select_project_modules`, `manage_members`, `manage_versions` and
   `manage_categories`, and `view_members` in read-only mode too; enable them on the MCP application
@@ -37,6 +37,15 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `view_wiki_edits`, `view_files`, `view_documents`, `view_changesets` and `view_messages`, and with
   writes on `edit_wiki_pages`, `rename_wiki_pages`, `protect_wiki_pages` and `manage_files`; enable
   them on the MCP application.
+- Nine tools delete: `delete_issue`, `delete_time_entry`, `delete_news`, `delete_wiki_page`,
+  `delete_attachment`, `delete_version`, `delete_issue_category`, `delete_membership` and
+  `delete_project`. No plugin setting gates them: each needs the permission Redmine has for that
+  deletion, and a token without the scope does not list the tool. `delete_issue` and
+  `delete_wiki_page` ask what becomes of logged time and of child pages, as core's forms do, where
+  its API decides silently. **Upgrade step:** with writes on, the server also advertises
+  `delete_issues`, `delete_project`, `delete_wiki_pages` and `delete_wiki_pages_attachments`; tick
+  them on the MCP application only if agents may delete. `manage_versions`, `manage_categories`,
+  `manage_members`, `manage_news` and the `edit_time_entries` pair now also delete.
 - `get_project` returns `inherit_members`.
 - `TODO.md` lists the tools held back: those with no REST API action yet, those that need the
   `admin` scope, and what is not planned.

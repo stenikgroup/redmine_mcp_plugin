@@ -22,6 +22,12 @@ validations on. Revisit when core exposes them.
 | `comment_news` | `comment_news` | No API action on comments |
 | `save_query` (create or update a saved query) | `save_queries`, `manage_public_queries` | Queries are read-only (`index` only) |
 
+## Postponed: no REST API action
+
+| Tool | Scope | Note |
+|---|---|---|
+| Delete one version of a wiki page | `delete_wiki_pages` | `destroy_version` is a web action only |
+
 ## Postponed: needs a binary transport
 
 `add_issue_attachment` and `add_file` take the file as text, so only text files can be sent. Images,

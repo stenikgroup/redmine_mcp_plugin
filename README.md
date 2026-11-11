@@ -157,6 +157,10 @@ sections.
 | `rename_wiki_pages` | Rename wiki pages | Wiki |
 | `protect_wiki_pages` | Protect wiki pages | Wiki |
 | `manage_files` | Manage files | Files |
+| `delete_issues` | Delete issues | Issue tracking |
+| `delete_project` | Delete the project | Project |
+| `delete_wiki_pages` | Delete wiki pages | Wiki |
+| `delete_wiki_pages_attachments` | Delete attachments | Wiki |
 | `set_notes_private` | Set notes as private | Issue tracking |
 | `edit_own_issue_notes` | Edit own notes | Issue tracking |
 | `edit_issue_notes` | Edit notes | Issue tracking |
@@ -220,8 +224,8 @@ Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_priv
 `set_own_issues_private`, `manage_issue_relations`, `manage_news`, `add_project`, `add_subprojects`,
 `edit_project`, `close_project`, `select_project_publicity`, `select_project_modules`, `manage_members`,
 `manage_versions`, `manage_categories`, `edit_issue_notes`, `edit_time_entries`, `edit_own_time_entries`,
-`log_time_for_other_users`, `copy_issues`, `edit_wiki_pages`, `rename_wiki_pages`, `protect_wiki_pages`
-and `manage_files`. With redmine_checklists installed, `view_checklists`
+`log_time_for_other_users`, `copy_issues`, `edit_wiki_pages`, `rename_wiki_pages`, `protect_wiki_pages`,
+`manage_files`, `delete_issues`, `delete_project`, `delete_wiki_pages` and `delete_wiki_pages_attachments`. With redmine_checklists installed, `view_checklists`
 joins the read-only set and `done_checklists` and `edit_checklists` the write set; with
 redmineup_tags, `create_tags` and `edit_tags` join the write set. The OAuth application in
 Redmine must enable at least these; it may enable more. The same file probes Doorkeeper for PKCE support rather than
@@ -422,12 +426,21 @@ while read-only mode is on, which is the default.
 | `update_news` (write) | `manage_news`. Editing sends no email |
 | `update_wiki_page` (write) | `edit_wiki_pages`. Creates the page or replaces its text, keeping the history; `version` refuses an edit made meanwhile, as core's 409. A protected page needs `protect_wiki_pages`, and `parent_title` on an existing page `rename_wiki_pages`. Watchers are mailed as for an edit in the browser |
 | `add_file` (write) | `manage_files`, with the Files module on. A text file, on the project or on one of its versions; mails members when `file_added` is a notified event, as core |
+| `delete_issue` (write) | `delete_issues`, on the issue's tracker. Subtasks go with it. With time logged, `time_entries` must say `destroy`, `nullify` or `reassign`, as core's form asks |
+| `delete_time_entry` (write) | `edit_own_time_entries` for the caller's own entry, `edit_time_entries` for anyone's, as core |
+| `delete_news` (write) | `manage_news` |
+| `delete_wiki_page` (write) | `delete_wiki_pages`, plus `protect_wiki_pages` for a protected page. With child pages, `children` must say `nullify`, `destroy` or `reassign`, as core's form asks |
+| `delete_attachment` (write) | The container's rule, as core's `Attachment#deletable?`: `edit_issues` or `edit_own_issues` on an issue, where the removal is journaled, `manage_files` on a project or a version, `delete_wiki_pages_attachments` on a wiki page |
+| `delete_version` (write) | `manage_versions`. Refused, with the cause, for a version that issues target, that has files, or that a custom field refers to, as core's `Version#deletable?` |
+| `delete_issue_category` (write) | `manage_categories`. Its issues lose the category or take `reassign_to` |
+| `delete_membership` (write) | `manage_members`. Refused for an inherited role or a role outside the caller's managed roles, as core's `Member#deletable?` |
+| `delete_project` (write) | `delete_project`, and an administrator when the project has subprojects, as core's `Project#deletable?`. `confirm` repeats the identifier, as the web form. Core deletes in a background job and mails the user |
 | `create_project` (write) | `add_project` for a root project, `add_subprojects` on the parent for a subproject, plus `select_project_publicity` for `is_public`, `select_project_modules` for `enabled_modules` and `manage_members` for `inherit_members`. A non-administrator becomes a member with the default role, as in core |
 | `update_project` (write) | `edit_project`, plus the per-field permissions of `create_project`, and `add_subprojects` or `add_project` to move it. The identifier cannot be changed |
 | `close_project`, `reopen_project` (write) | `close_project`. Subprojects follow, as in core |
 | `create_version`, `update_version` (write) | `manage_versions`. `sharing` within core's `allowed_sharings`. The saved version is read back only under `view_issues`; without it the write is acknowledged by id |
 | `create_issue_category`, `update_issue_category` (write) | `manage_categories`, with the issue tracking module on. The default assignee is any user or group, as core's API. Read back only under `view_issues` |
-| `update_membership` (write) | `manage_members`. Adds any user or group, or replaces a member's roles, among the roles the caller may manage; inherited roles are left alone. Removing a member is not possible |
+| `update_membership` (write) | `manage_members`. Adds any user or group, or replaces a member's roles, among the roles the caller may manage; inherited roles are left alone |
 
 These tools add no rule of their own to Redmine's: a tool does what its permission allows in core,
 and an administrator who does not want one leaves its scope off the OAuth application.
@@ -435,9 +448,23 @@ and an administrator who does not want one leaves its scope off the OAuth applic
 The project structure tools refuse what core would drop in silence, naming the parameter: a field
 the role or the token may not set, a parent the caller may not extend, a `sharing` outside
 `allowed_sharings`, a role outside the caller's managed roles, an unknown module or tracker. A write
-on a closed project says the project is closed, where core's permission check only says no. Nothing
-here deletes: no project, version, category or member can be removed, and archiving needs an
-administrator; see [TODO.md](TODO.md).
+on a closed project says the project is closed, where core's permission check only says no. Archiving a project needs
+an administrator; see [TODO.md](TODO.md).
+
+### Deleting
+
+Nine tools delete, and no plugin setting switches them on or off. Each is gated on the permission
+Redmine has for that deletion, which is also its OAuth scope: an administrator who does not want
+agents to delete leaves `delete_issues`, `delete_project`, `delete_wiki_pages` and
+`delete_wiki_pages_attachments` unticked on the OAuth application, and a token without the scope
+does not even list the tool. Five deletions share the scope of the matching edit, because Redmine
+grants them together: a version with `manage_versions`, a category with `manage_categories`, a
+member with `manage_members`, a news item with `manage_news`, a time entry with the two
+`edit_time_entries` permissions. Read-only mode, which is the default, hides all of them.
+
+Where core's web form asks a question and its API answers it silently, the tool asks: what becomes
+of the time logged on a deleted issue, and of the child pages of a deleted wiki page. Every one is
+annotated destructive and tells the agent to get explicit confirmation first.
 
 `search` runs core's own fetcher. Core keeps, for one project, the types the user may view there; its
 queries then go through `.visible` scopes, which read roles and not a token's scopes, so the tool

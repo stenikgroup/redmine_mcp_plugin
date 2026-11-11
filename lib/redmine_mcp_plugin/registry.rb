@@ -52,7 +52,16 @@ module RedmineMcpPlugin
           Tools::UpdateVersion,
           Tools::CreateIssueCategory,
           Tools::UpdateIssueCategory,
-          Tools::UpdateMembership
+          Tools::UpdateMembership,
+          Tools::DeleteIssue,
+          Tools::DeleteTimeEntry,
+          Tools::DeleteNews,
+          Tools::DeleteWikiPage,
+          Tools::DeleteAttachment,
+          Tools::DeleteVersion,
+          Tools::DeleteIssueCategory,
+          Tools::DeleteMembership,
+          Tools::DeleteProject
         ]
       end
     end
