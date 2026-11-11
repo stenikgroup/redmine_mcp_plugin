@@ -305,6 +305,29 @@ class McpCustomFieldsTest < Redmine::ControllerTest
     assert_equal ['2', User.find(2).name], saved.values_at('value', 'label')
   end
 
+  # The history names a value stored as an id, as the custom field row does.
+  def test_get_issue_names_a_custom_field_change_in_the_history
+    enable_mcp('read_only' => '0')
+    field = IssueCustomField.create!(name: 'Reviewer', field_format: 'user', is_for_all: true, tracker_ids: [1])
+    call_tool('update_issue', { 'issue' => 1, 'custom_field_values' => { field.id.to_s => '2' } })
+    Issue.find(1).journals.last.details.create!(property: 'cf', prop_key: field.id.to_s, old_value: '2', value: '999')
+
+    journals = call_tool('get_issue', { 'issue' => 1 })['structuredContent']['journals']
+    changes  = journals.flat_map { |journal| journal['details'] }.select { |detail| detail['name'] == 'Reviewer' }
+    name     = User.find(2).name
+    assert_equal([[nil, name], [name, '999']], changes.map { |c| c.values_at('old_value', 'new_value') })
+  end
+
+  # Core lists the caller twice in a user field: as "<< me >>" and by name.
+  def test_get_issue_fields_lists_each_user_once
+    field  = IssueCustomField.create!(name: 'Reviewer', field_format: 'user', is_for_all: true, tracker_ids: [1])
+    fields = call_tool('get_issue_fields', { 'issue' => 1 })['structuredContent']['custom_fields']
+    values = fields.detect { |f| f['id'] == field.id }['possible_values']
+    ids    = values.map { |v| v['value'] }
+    assert_equal ids.uniq, ids
+    assert_equal User.find(2).name, values.detect { |v| v['value'] == '2' }['label']
+  end
+
   # --- excluded custom fields ----------------------------------------------
 
   def exclude_custom_fields(*ids)

@@ -120,6 +120,13 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 - `get_project`, `list_projects` and the replies of the project write tools give `parent_id` only
   when the caller can see the parent, as Redmine's REST API does. They gave the id of a private
   parent to a caller who saw only the subproject.
+- `get_issue` names, in the history, the value of a custom field stored as an id (enumeration, user,
+  version), as it names a status or an assignee. It gave the raw id. A user or version the caller
+  may not see, or deleted since, stays an id (#49).
+- `get_issue_fields` and `list_enumerations` list the caller once in the `possible_values` of a
+  user custom field. Core's "<< me >>" shortcut repeated the caller's id under a second label (#49).
+- The `status` description of `search_issues` says that a saved query keeps its own status filter
+  when `status` is left out (#49).
 
 ### Security
 

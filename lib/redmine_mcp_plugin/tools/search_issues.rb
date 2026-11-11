@@ -44,7 +44,8 @@ module RedmineMcpPlugin
                               'description' => 'Restrict to one project (identifier or numeric id).' },
                'search' => { 'type' => 'string', 'description' => 'Text searched across subject, description and notes.' },
                'status' => { 'type' => 'string', 'enum' => %w[open closed all],
-                             'description' => 'Issue status filter. Defaults to open.' },
+                             'description' => 'Issue status filter. Defaults to open, or to the saved ' \
+                                              "query's own status filter with query." },
                'tracker' => { 'type' => 'string', 'description' => 'Tracker name, e.g. Bug.' },
                'priority' => { 'type' => 'string', 'description' => 'Priority name.' },
                'fixed_version' => { 'type' => 'string', 'description' => 'Target version name. Needs project.' },
