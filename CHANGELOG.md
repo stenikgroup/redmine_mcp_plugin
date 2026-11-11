@@ -49,6 +49,9 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 - `get_project` returns `inherit_members`.
 - `TODO.md` lists the tools held back: those with no REST API action yet, those that need the
   `admin` scope, and what is not planned.
+- The test suite runs in CI, on GitHub Actions: Redmine 6.1.0, `6.1-stable`, `7.0-stable` and trunk,
+  on each Ruby they accept, from 3.2 to 4.0, on every pull request and once a week.
+  `test/docker/Dockerfile` builds one cell of that matrix to run it locally.
 
 ### Changed
 
@@ -160,7 +163,7 @@ First version of the herewithme fork. Checked on Redmine 6.1.2 (Rails 7.2.3) and
 - The README describes the fork lineage. The clone URL, the plugin URL and the
   `resource_documentation` of `/.well-known/oauth-protected-resource` point to this repository.
 - The README's target platform becomes a compatibility table: the versions checked for this
-  release, and the platform Be API runs in production.
+  release, and the platform the fork runs on in production.
 
 ## [0.1.0]
 

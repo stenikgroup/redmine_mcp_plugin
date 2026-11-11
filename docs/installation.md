@@ -4,22 +4,27 @@ For the administrator who installs the plugin. The OAuth application is covered 
 
 ## Compatibility
 
-Checked with version 0.2.0 on 2026-10-27:
+The test suite runs in CI on each Ruby that each Redmine accepts in its `Gemfile`, on every pull
+request and once a week:
 
 | Redmine | Rails | Ruby |
 |---|---|---|
-| 6.1.2 | 7.2.3 | 3.3 |
-| 7.0.2 | 8.1.4 | 3.3 |
+| 6.1.0 and `6.1-stable` | 7.2 | 3.2, 3.3, 3.4 |
+| `7.0-stable` | 8.1 | 3.2, 3.3, 3.4, 4.0 |
+| trunk | 8.1 | 3.3, 3.4, 4.0 |
 
-On each, the test suite passes and every tool was exercised live, over an API key and over a scoped
-OAuth2 token. Rails is the version each Redmine pins in its `Gemfile`. `init.rb` declares a floor of
-Redmine 6.1.0, which is where OAuth2 (Doorkeeper) support lands. Redmine 7.0 removed
+Rails is the version each Redmine pins in its `Gemfile`. `init.rb` declares a floor of Redmine
+6.1.0, which is where OAuth2 (Doorkeeper) support lands. Redmine 7.0 removed
 `Issue#addable_watcher_users`; the plugin rebuilds that list itself from core scopes that exist on
-both versions.
+both versions. The exact matrix, and how to run one cell of it locally, is in
+[internals.md](internals.md#running-the-tests).
 
-Be API runs this fork in production on Redmine trunk, with Rails 8.1.4 and Ruby 3.2.3. The test
-suite is not run there: trunk and Ruby 3.2 are covered by live use only, and a core removal reaches
-trunk before any release.
+Beyond the suite, every tool was exercised live with version 0.2.0 on 2026-10-27, over an API key
+and over a scoped OAuth2 token, on Redmine 6.1.2 and 7.0.2 with Ruby 3.3.
+
+The plugin runs in production on a live instance of 200 users, 30 of them over MCP, with 150
+projects, 100,000 issues and 100 custom fields. A core removal reaches trunk before any release,
+which is why trunk is part of the weekly run.
 
 Before this fork, stenikgroup developed and ran the plugin on Redmine 6.1.2 with Ruby 3.3.11.
 

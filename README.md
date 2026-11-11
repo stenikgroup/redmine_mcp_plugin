@@ -33,13 +33,17 @@ postponed are in [TODO.md](TODO.md).
 
 ## Requirements
 
+[![Tests](https://github.com/herewithme/redmine_mcp_plugin/actions/workflows/tests.yml/badge.svg)](https://github.com/herewithme/redmine_mcp_plugin/actions/workflows/tests.yml)
+
 | Redmine | Rails | Ruby |
 |---|---|---|
-| 6.1.2 | 7.2.3 | 3.3 |
-| 7.0.2 | 8.1.4 | 3.3 |
+| 6.1 | 7.2 | 3.2, 3.3, 3.4 |
+| 7.0 | 8.1 | 3.2, 3.3, 3.4, 4.0 |
+| trunk | 8.1 | 3.3, 3.4, 4.0 |
 
-Redmine 6.1.0 is the floor: it is where OAuth2 (Doorkeeper) support lands. What was checked, and
-how, is in [docs/installation.md](docs/installation.md#compatibility).
+Redmine 6.1.0 is the floor: it is where OAuth2 (Doorkeeper) support lands. The test suite runs on
+every line of this table; what else was checked, and how, is in
+[docs/installation.md](docs/installation.md#compatibility).
 
 ## Quick start
 
@@ -84,7 +88,7 @@ is the third link in a chain:
 2. [stenikgroup/redmine_mcp_plugin](https://github.com/stenikgroup/redmine_mcp_plugin), by Stenik
    (Stoyan Tinchev), forked from the first: write tools, every issue field, relations, news,
    attachments, checklists and tags, narrowed OAuth2 scopes, the Doorkeeper fix and extensions.
-3. This fork, by Be API (Amaury Balmer), forked from the second: Redmine 7.0 compatibility, a
+3. This fork, by Amaury Balmer, forked from the second: Redmine 7.0 compatibility, a
    working test suite, custom field values checked before a write, and **security fixes the first
    two do not have** (see [docs/security.md](docs/security.md)). See the changelog.
 
