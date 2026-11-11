@@ -7,6 +7,8 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-11
+
 ### Added
 
 - Nine tools for the structure of a project, each mapped to a Redmine permission, which is also its
@@ -19,7 +21,7 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   server now advertises `add_project`, `add_subprojects`, `edit_project`, `close_project`,
   `select_project_publicity`, `select_project_modules`, `manage_members`, `manage_versions` and
   `manage_categories`, and `view_members` in read-only mode too; enable them on the MCP application
-  in Administration → Applications, or the next consent fails with `invalid_scope`.
+  in Administration → Applications.
 - `update_time_entry` corrects a time entry, or moves it to another issue or project: the caller's
   own under `edit_own_time_entries`, anyone's under `edit_time_entries`.
 - `copy_issue` copies an issue, in its project or to another, with core's options (attachments,
@@ -88,7 +90,6 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   **Upgrade step:** with writes on, the server also advertises `edit_issue_notes`,
   `edit_time_entries`, `edit_own_time_entries`, `log_time_for_other_users` and `copy_issues`; enable
   them on the MCP application.
-
 - An argument declared as an array must be an array, and one declared as an object an object. A
   single value where a list is declared was passed on and wrapped by each tool, and `filters` that
   were not an object were ignored, so the search answered as if none had been sent. Every array
@@ -260,7 +261,8 @@ The version declared by
 unchanged, by [stenikgroup/redmine_mcp_plugin](https://github.com/stenikgroup/redmine_mcp_plugin)
 through all of its work. This fork starts from stenikgroup's last commit, `19ce030`.
 
-[Unreleased]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/herewithme/redmine_mcp_plugin/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/herewithme/redmine_mcp_plugin/compare/19ce030...v0.2.0
