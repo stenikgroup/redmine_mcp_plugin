@@ -401,16 +401,19 @@ while read-only mode is on, which is the default.
 | `update_issue_checklists` (write) | `edit_checklists` to add or rename, `done_checklists` or `edit_checklists` to tick or untick. Present only with redmine_checklists |
 | `update_issue_relations` (write) | `manage_issue_relations` on the issue's project, as core's relation form. Every relation type core has |
 | `log_time` (write) | `log_time`, plus `log_time_for_other_users` when `user` names someone else |
-| `update_time_entry` (write) | `edit_own_time_entries` for the caller's own entry, `edit_time_entries` for anyone's, plus `view_time_entries` to read it and `log_time_for_other_users` to change whose it is. The entry stays on its issue and project |
+| `update_time_entry` (write) | `edit_own_time_entries` for the caller's own entry, `edit_time_entries` for anyone's, plus `view_time_entries` to read it and `log_time_for_other_users` to change whose it is. `issue` or `project` moves the entry, under `log_time` on the issue's project as in core |
 | `copy_issue` (write) | `copy_issues` on the source project and `add_issues` on the target's tracker, plus the per-field permissions of `create_issue`. Copies the fields, custom fields, parent and attachments, the watchers under `add_issue_watchers`, the subtasks on request, and links the copy as core does |
 | `create_news` (write) | `manage_news`. Publishes at once and, when `news_added` is a notified event, emails project members and news watchers; the tool tells the agent to get explicit confirmation first |
 | `update_news` (write) | `manage_news`. Editing sends no email |
 | `create_project` (write) | `add_project` for a root project, `add_subprojects` on the parent for a subproject, plus `select_project_publicity` for `is_public`, `select_project_modules` for `enabled_modules` and `manage_members` for `inherit_members`. A non-administrator becomes a member with the default role, as in core |
 | `update_project` (write) | `edit_project`, plus the per-field permissions of `create_project`, and `add_subprojects` or `add_project` to move it. The identifier cannot be changed |
 | `close_project`, `reopen_project` (write) | `close_project`. Subprojects follow, as in core |
-| `create_version`, `update_version` (write) | `manage_versions`. `sharing` within core's `allowed_sharings`; updating also needs `view_issues`, since the reply returns the version |
-| `create_issue_category`, `update_issue_category` (write) | `manage_categories`, with the issue tracking module on. The default assignee must be assignable on the project, which is stricter than core's API; updating also needs `view_issues` |
-| `update_membership` (write) | `manage_members`. Adds a user or a group, or replaces a member's roles, among the roles the caller may manage; inherited roles are left alone. Removing a member is not possible |
+| `create_version`, `update_version` (write) | `manage_versions`. `sharing` within core's `allowed_sharings`. The saved version is read back only under `view_issues`; without it the write is acknowledged by id |
+| `create_issue_category`, `update_issue_category` (write) | `manage_categories`, with the issue tracking module on. The default assignee is any user or group, as core's API. Read back only under `view_issues` |
+| `update_membership` (write) | `manage_members`. Adds any user or group, or replaces a member's roles, among the roles the caller may manage; inherited roles are left alone. Removing a member is not possible |
+
+These tools add no rule of their own to Redmine's: a tool does what its permission allows in core,
+and an administrator who does not want one leaves its scope off the OAuth application.
 
 The project structure tools refuse what core would drop in silence, naming the parameter: a field
 the role or the token may not set, a parent the caller may not extend, a `sharing` outside

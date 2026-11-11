@@ -79,6 +79,17 @@ class McpIssueTimeTest < Redmine::ControllerTest
                  refusal(call_tool('update_time_entry', { 'time_entry' => entry.id, 'activity' => 'Napping' }))
   end
 
+  def test_update_time_entry_moves_to_another_issue_or_off_any_issue
+    entry = TimeEntry.generate!(project_id: 1, issue: Issue.find(1), user: User.find(2))
+
+    moved = state(call_tool('update_time_entry', { 'time_entry' => entry.id, 'issue' => 3 }))
+    assert_equal 3, moved['issue_id']
+    assert_equal Issue.find(3).project.identifier, moved['project_identifier']
+
+    assert_nil state(call_tool('update_time_entry', { 'time_entry' => entry.id, 'issue' => 'none' }))['issue_id']
+    assert_match 'No visible issue', refusal(call_tool('update_time_entry', { 'time_entry' => entry.id, 'issue' => 999_999 }))
+  end
+
   def test_log_time_for_another_user_needs_its_permission
     arguments = { 'project' => 'ecookbook', 'hours' => 1, 'activity' => 'Design', 'user' => 3 }
     saved = state(call_tool('log_time', arguments))

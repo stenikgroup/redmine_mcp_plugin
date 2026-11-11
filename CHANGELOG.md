@@ -20,8 +20,8 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
   `select_project_publicity`, `select_project_modules`, `manage_members`, `manage_versions` and
   `manage_categories`, and `view_members` in read-only mode too; enable them on the MCP application
   in Administration → Applications, or the next consent fails with `invalid_scope`.
-- `update_time_entry` corrects a time entry: the caller's own under `edit_own_time_entries`, anyone's
-  under `edit_time_entries`.
+- `update_time_entry` corrects a time entry, or moves it to another issue or project: the caller's
+  own under `edit_own_time_entries`, anyone's under `edit_time_entries`.
 - `copy_issue` copies an issue, in its project or to another, with core's options (attachments,
   subtasks, the "copied to" relation) and the field overrides of `create_issue`.
 - `log_time` and `update_time_entry` take `user`, to log time for someone else under

@@ -6,11 +6,11 @@ module RedmineMcpPlugin
       tool 'update_time_entry',
            title: 'Update time entry',
            description: 'Correct a time entry from list_time_entries: hours, activity, date, comment, custom ' \
-                        'fields, or whose time it is. Only what is sent changes. Your own entries, or ' \
+                        'fields, whose time it is, or the issue or project it is logged on. Only what is sent changes. Your own entries, or ' \
                         'anyone\'s where your role may edit time entries; say whose entry it is and get ' \
                         'explicit confirmation before changing someone else\'s. End with the url.',
            permission: %i[edit_time_entries edit_own_time_entries],
-           scopes: %i[view_time_entries log_time_for_other_users],
+           scopes: %i[view_time_entries log_time log_time_for_other_users],
            plain: %w[comments],
            write: true,
            destructive: true,
@@ -18,6 +18,10 @@ module RedmineMcpPlugin
              'type' => 'object',
              'properties' => {
                'time_entry' => { 'type' => 'integer', 'description' => 'Time entry id.' },
+               'issue' => { 'type' => %w[integer string],
+                            'description' => 'Issue id to move the entry to, or "none" to keep it on the project alone.' },
+               'project' => { 'type' => %w[string integer],
+                              'description' => 'Project identifier or numeric id to move the entry to.' },
                'hours' => { 'type' => 'number', 'minimum' => 0, 'description' => 'Hours spent, e.g. 1.5.' },
                'activity' => { 'type' => 'string',
                                'description' => 'Activity name, from list_enumerations for the entry\'s project.' },
@@ -64,16 +68,32 @@ module RedmineMcpPlugin
       end
 
       def attributes_from(entry, arguments)
-        attributes = {}
+        attributes = target_attributes(arguments)
+        project    = Project.find_by(id: attributes['project_id']) || entry.project
         attributes['hours']       = arguments['hours'] unless arguments['hours'].nil?
         attributes['comments']    = arguments['comments'].to_s unless arguments['comments'].nil?
         attributes['spent_on']    = iso_date(arguments['spent_on'], 'spent_on') unless arguments['spent_on'].nil?
-        attributes['activity_id'] = time_entry_activity(entry.project, arguments['activity']).id unless arguments['activity'].nil?
+        attributes['activity_id'] = time_entry_activity(project, arguments['activity']).id unless arguments['activity'].nil?
         attributes['user_id']     = time_entry_user_id(entry, arguments['user']) unless arguments['user'].nil?
 
         values = custom_field_values_for(entry, arguments['custom_field_values'])
         attributes['custom_field_values'] = values if values
         attributes
+      end
+
+      # Core's rule for a move: the issue must be visible and its project allow
+      # log_time, and an issue brings its project with it.
+      def target_attributes(arguments)
+        attributes = {}
+        attributes['project_id'] = fetch_project(arguments['project']).id unless arguments['project'].nil?
+        return attributes if arguments['issue'].nil?
+        return attributes.merge('issue_id' => '') if arguments['issue'].to_s == 'none'
+        raise InvalidArgument, 'issue must be an issue id, or "none"' unless SchemaValidator.integerish?(arguments['issue'])
+
+        issue = fetch_issue(arguments['issue'])
+        authorize!(:log_time, issue.project)
+        attributes['project_id'] ||= issue.project_id
+        attributes.merge('issue_id' => issue.id)
       end
     end
   end

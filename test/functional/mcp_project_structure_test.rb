@@ -205,11 +205,16 @@ class McpProjectStructureTest < Redmine::ControllerTest
     assert_nil updated['assigned_to']
   end
 
-  def test_issue_category_refuses_an_assignee_outside_the_project
+  # Core's API takes any principal as the default assignee, so this does too.
+  def test_issue_category_takes_any_user_and_refuses_an_id_that_names_nobody
     outsider = User.generate!
-    text = refusal(call_tool('create_issue_category', { 'project' => 'ecookbook', 'name' => 'Billing',
-                                                        'assigned_to' => outsider.id }))
-    assert_match "#{outsider.id} is not assignable on ecookbook", text
+    created  = state(call_tool('create_issue_category', { 'project' => 'ecookbook', 'name' => 'Billing',
+                                                          'assigned_to' => outsider.id }))
+    assert_equal outsider.id, created['assigned_to']['id']
+
+    text = refusal(call_tool('create_issue_category', { 'project' => 'ecookbook', 'name' => 'Other',
+                                                        'assigned_to' => 999_999 }))
+    assert_match 'No user or group with id 999999', text
   end
 
   def test_issue_category_needs_the_issue_tracking_module
@@ -260,7 +265,7 @@ class McpProjectStructureTest < Redmine::ControllerTest
   def test_update_membership_refuses_an_empty_list_and_an_unknown_principal
     assert_match 'roles',
                  refusal(call_tool('update_membership', { 'project' => 'ecookbook', 'principal' => 3, 'roles' => [] }))
-    assert_match 'No visible active user or group with id 99999',
+    assert_match 'No user or group with id 99999',
                  refusal(call_tool('update_membership', { 'project' => 'ecookbook', 'principal' => 99_999, 'roles' => ['Reporter'] }))
   end
 
@@ -298,13 +303,20 @@ class McpProjectStructureTest < Redmine::ControllerTest
     assert_nil Project.find_by(identifier: 'x-three')
   end
 
-  # A write replies with the record, so the token must be allowed to read it.
-  def test_version_and_category_writes_need_view_issues
+  # Core's update needs no read permission and answers with no body: the write
+  # goes through, and the record is not read back to a token that may not view it.
+  def test_version_and_category_writes_do_not_need_view_issues
     headers = bearer('view_project manage_versions manage_categories')
 
-    assert_match 'No visible version', refusal(call_as(headers, 'update_version', { 'version' => 2, 'name' => '9.0' })['result'])
-    assert_match 'No visible category',
-                 refusal(call_as(headers, 'update_issue_category', { 'category' => 1, 'name' => 'Billing' })['result'])
+    version = state(call_as(headers, 'update_version', { 'version' => 2, 'name' => '9.0' })['result'])
+    assert_equal '9.0', Version.find(2).name
+    assert_equal({ 'id' => 2, 'project_identifier' => 'ecookbook' }, version.slice('id', 'project_identifier'))
+    assert_not version.key?('description')
+    assert_match 'Reading it back needs ', version['note']
+
+    category = state(call_as(headers, 'update_issue_category', { 'category' => 1, 'name' => 'Billing' })['result'])
+    assert_equal 'Billing', IssueCategory.find(1).name
+    assert_not category.key?('name')
   end
 
   def test_a_gated_project_field_needs_its_scope

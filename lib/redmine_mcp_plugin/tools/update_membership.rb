@@ -41,10 +41,9 @@ module RedmineMcpPlugin
                                                      url: absolute_url(:settings_project_url, project, tab: 'members'))
       end
 
-      # Who core's member form offers, as far as the caller may see them.
+      # Any user or group, as core's API, which checks only that the principal exists.
       def new_principal(id)
-        Principal.visible(user).active.where(type: %w[User Group]).find_by(id: id) ||
-          raise(ToolError, "No visible active user or group with id #{id}")
+        Principal.where(type: %w[User Group]).find_by(id: id) || raise(ToolError, "No user or group with id #{id}")
       end
 
       # Core keeps the roles the caller may manage and drops the others silently.

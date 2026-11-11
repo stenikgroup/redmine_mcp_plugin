@@ -1111,16 +1111,18 @@ module RedmineMcpPlugin
       project_state(Project.find(project.id)).merge(url: absolute_url(:project_url, project))
     end
 
-    # A write replies with the saved record, so the caller must be allowed to
-    # read it: view_issues for a version or a category, as core's own pages.
-    # The same message whether it does not exist or may not be seen.
+    # The same message whether it does not exist or its project may not be
+    # seen. The caller adds authorize! for its permission.
     def fetch_version(id)
       version = Version.find_by(id: id.to_i)
-      raise ToolError, "No visible version with id #{id.inspect}" if version.nil? || !readable_in?(version.project, :view_issues)
+      raise ToolError, "No visible version with id #{id.inspect}" if version.nil? || !version.project.visible?(user)
 
       version
     end
 
+    # Core's update answers with no body, so a write needs no read permission;
+    # the saved record is returned only to a caller who may read it, and
+    # otherwise the write is acknowledged by id.
     def readable_in?(project, permission)
       project.visible?(user) && user.allowed_to?(permission, project)
     end
@@ -1163,6 +1165,8 @@ module RedmineMcpPlugin
 
     def version_state(version)
       version = Version.find(version.id)
+      return written_unread(version, :version_url) unless readable_in?(version.project, :view_issues)
+
       {
         id: version.id,
         name: version.name,
@@ -1182,13 +1186,13 @@ module RedmineMcpPlugin
 
     def fetch_issue_category(id)
       category = IssueCategory.find_by(id: id.to_i)
-      raise ToolError, "No visible category with id #{id.inspect}" if category.nil? || !readable_in?(category.project, :view_issues)
+      raise ToolError, "No visible category with id #{id.inspect}" if category.nil? || !category.project.visible?(user)
 
       category
     end
 
-    # The assignee an issue of this category gets; core's form offers the
-    # project's assignable users and its API checks nothing.
+    # The assignee an issue of this category gets. Core's API takes any id; only
+    # one that names nobody is refused here, where core would store it.
     def category_attributes_from(category, arguments)
       attributes = {}
       attributes['name'] = arguments['name'].to_s unless arguments['name'].nil?
@@ -1200,15 +1204,24 @@ module RedmineMcpPlugin
 
     def category_assignee_id(category, value)
       id = user_id_from(value, 'assigned_to')
-      return id if category.project.assignable_users.any? { |principal| principal.id == id }
+      return id if Principal.where(type: %w[User Group]).exists?(id: id)
 
-      raise ToolError, "#{id} is not assignable on #{category.project.identifier}"
+      raise ToolError, "No user or group with id #{id}"
     end
 
     def category_state(category)
       category = IssueCategory.find(category.id)
+      return written_unread(category) unless readable_in?(category.project, :view_issues)
+
       { id: category.id, name: category.name, project_identifier: category.project.identifier,
         assigned_to: category.assigned_to && principal_row(category.assigned_to) }
+    end
+
+    def written_unread(record, url_helper = nil)
+      state = { id: record.id, project_identifier: record.project.identifier,
+                note: "Saved. Reading it back needs #{permission_labels(:view_issues)}." }
+      state[:url] = absolute_url(url_helper, record) if url_helper
+      state
     end
 
     def membership_row(member)

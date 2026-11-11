@@ -22,12 +22,6 @@ validations on. Revisit when core exposes them.
 | `comment_news` | `comment_news` | No API action on comments |
 | `save_query` (create or update a saved query) | `save_queries`, `manage_public_queries` | Queries are read-only (`index` only) |
 
-## Postponed: not needed yet
-
-| Tool | Scope | Note |
-|---|---|---|
-| Move a time entry to another issue or project | `edit_time_entries`, `edit_own_time_entries` | `update_time_entry` leaves the entry where it is; the REST API accepts `issue_id` and `project_id` |
-
 ## Postponed: requires the `admin` scope
 
 Redmine has no fine-grained permission for these; they are open to
