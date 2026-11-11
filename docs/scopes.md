@@ -20,7 +20,7 @@ server stays read-only.
 | `view_project` | View projects | Project | `list_projects`, `get_project`, projects in `search` |
 | `view_issues` | View Issues | Issue tracking | `search_issues`, `get_issue`, `get_attachment`, `list_queries`, `get_issue_fields`, issues in `search` |
 | `view_issue_watchers` | View watchers list | Issue tracking | The watchers in `get_issue` |
-| `view_private_notes` | View private notes | Issue tracking | Other users' private notes in `get_issue` |
+| `view_private_notes` | View private notes | Issue tracking | Other users' private notes in `get_issue`, and matching on private notes in `search` |
 | `view_wiki_pages` | View wiki | Wiki | `list_wiki_pages`, `get_wiki_page`, wiki pages in `search` |
 | `view_time_entries` | View spent time | Time tracking | `list_time_entries`; reading the entry in `update_time_entry` and `delete_time_entry` |
 | `view_news` | View news | News | `list_news`, `get_news`, news in `search` |
@@ -91,9 +91,8 @@ installing or removing one of those plugins changes the advertised set the way a
 All five sit under Issue tracking in the application form.
 
 `search` is Redmine's own search, and its SQL decides who matches a private note from the role, not
-from the token: an issue can come back because a private note holds the searched word, for a token
-without `view_private_notes` whose user's role has that permission. The note itself is never
-returned, and Redmine's REST search answers the same token the same way.
+from the token. The tool closes that for a token without `view_private_notes`: no private note is
+searched for it, so a match cannot tell it what one says. Redmine's own REST search does not.
 
 ## When the advertised set changes
 

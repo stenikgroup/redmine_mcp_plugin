@@ -67,6 +67,13 @@ plugin list shows it, and MCP clients read it as `serverInfo.version`.
 - HTTP Basic takes an API key as the username only while the API key mode is on. Switching that
   mode off left keys usable through Basic.
 
+### Fixed
+
+- A JSON-RPC `params` that is not an object is answered `-32602 Invalid params`. An array ended as
+  `-32603 Internal error`, with a backtrace in the log.
+- `delete_project` replies `scheduled`, and `deleted` only once the project is gone. It claimed the
+  deletion while core had only scheduled the background job. The tool is new in this release.
+
 ### Security
 
 All rated low, found by a review of `ce5ea01`.
@@ -82,6 +89,9 @@ All rated low, found by a review of `ce5ea01`.
   authorization server, which a cache in front of `/.well-known` could then serve to real clients.
   **Upgrade step:** check Administration → Settings → General → "Host name and path" and "Protocol":
   they must be the address MCP clients connect to, or the OAuth2 flow stops at discovery.
+- `search` no longer matches an issue on a private note for an OAuth token without
+  `view_private_notes`. Core's search decides that from the role alone, so a match told such a token
+  what a private note says; Redmine's own REST search still does.
 - A request authenticated by the session cookie must carry an `Origin` header and a Content-Type of
   `application/json`. One with no `Origin` was accepted, and a cross-site HTML form posted as
   `text/plain` was parsed as JSON.

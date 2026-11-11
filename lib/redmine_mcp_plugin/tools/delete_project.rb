@@ -8,7 +8,8 @@ module RedmineMcpPlugin
            description: 'Delete a project for good, with its subprojects and everything in them: issues, ' \
                         'time, wiki, files, news. It cannot be undone, and close_project is the reversible ' \
                         'way to retire one. Name the project and get explicit confirmation before calling. ' \
-                        'The deletion runs in the background and the user is emailed when it ends.',
+                        'The deletion runs in the background and the user is emailed when it ends: the reply says ' \
+                        'scheduled, and deleted only once the project is gone.',
            permission: :delete_project,
            write: true,
            destructive: true,
@@ -35,7 +36,10 @@ module RedmineMcpPlugin
 
         subprojects = project.descendants.pluck(:identifier)
         DestroyProjectJob.schedule(project, user: user)
-        { deleted: true, scheduled: true, id: project.id, identifier: project.identifier, subprojects: subprojects }
+        # Read back, as every reply: core has only scheduled the deletion, and
+        # the job may not have run, or may fail.
+        { scheduled: true, deleted: !Project.exists?(project.id), id: project.id, identifier: project.identifier,
+          subprojects: subprojects }
       end
     end
   end

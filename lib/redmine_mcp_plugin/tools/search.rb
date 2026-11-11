@@ -15,7 +15,7 @@ module RedmineMcpPlugin
                         'wiki pages, forum messages and projects, as Redmine\'s search box. For issues alone, ' \
                         'search_issues filters and sorts. Each result gives its type, title, an excerpt and its url.',
            permission: :search_project,
-           scopes: TYPE_PERMISSIONS.values,
+           scopes: TYPE_PERMISSIONS.values + %i[view_private_notes],
            schema: {
              'type' => 'object',
              'properties' => {
@@ -58,9 +58,22 @@ module RedmineMcpPlugin
 
         limit  = limit_for(arguments)
         offset = offset_for(arguments)
-        rows   = fetcher.results(offset, limit).map { |result| result_row(result) }
-        paged(total: fetcher.result_count, offset: offset, key: :results, rows: rows)
-          .merge(count_by_type: fetcher.result_count_by_type, searched_types: types)
+        without_withheld_notes do
+          rows = fetcher.results(offset, limit).map { |result| result_row(result) }
+          paged(total: fetcher.result_count, offset: offset, key: :results, rows: rows)
+            .merge(count_by_type: fetcher.result_count_by_type, searched_types: types)
+        end
+      end
+
+      # Core's search matches an issue on its private notes under a condition
+      # built from the roles alone. A caller without view_private_notes, which
+      # for a token means without the scope, must not learn from a match what a
+      # private note says. The fetcher queries lazily, so every read of it is
+      # inside the block.
+      def without_withheld_notes(&)
+        return yield if user.allowed_to?(:view_private_notes, nil, global: true)
+
+        WithheldPermissions.during(:view_private_notes, &)
       end
 
       # As core's controller.

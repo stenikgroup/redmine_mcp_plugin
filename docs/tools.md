@@ -20,7 +20,7 @@ Parameters, refusals and the behaviour shared across tools are in [tool-conventi
 | `delete_version` (write) | `manage_versions`. Refused, with the cause, for a version that issues target, that has files, or that a custom field refers to, as core's `Version#deletable?` |
 | `delete_issue_category` (write) | `manage_categories`. Its issues lose the category or take `reassign_to` |
 | `delete_membership` (write) | `manage_members`. Refused for an inherited role or a role outside the caller's managed roles, as core's `Member#deletable?` |
-| `delete_project` (write) | `delete_project`, and an administrator when the project has subprojects, as core's `Project#deletable?`. `confirm` repeats the identifier, as the web form. Core deletes in a background job and mails the user |
+| `delete_project` (write) | `delete_project`, and an administrator when the project has subprojects, as core's `Project#deletable?`. `confirm` repeats the identifier, as the web form. Core deletes in a background job and mails the user: the reply says `scheduled`, and `deleted` only once the project is gone |
 
 ## Issues
 
@@ -80,7 +80,7 @@ Parameters, refusals and the behaviour shared across tools are in [tool-conventi
 | Tool | Permission |
 |---|---|
 | `whoami` | none. Reports identity, auth mode and granted scopes |
-| `search` | `search_project`. Core's search box: issues, news, documents, changesets, wiki pages, forum messages and projects, each only under its own `view_` permission |
+| `search` | `search_project`. Core's search box: issues, news, documents, changesets, wiki pages, forum messages and projects, each only under its own `view_` permission. Private notes are searched only under `view_private_notes` |
 | `list_enumerations` | none. Trackers, statuses, priorities, time entry activities; with `project`, that project's activities and, for a caller with `log_time` there, the time entry custom fields with their required flag and allowed values |
 | `list_users` | none. Filtered by `Principal.visible` |
 
