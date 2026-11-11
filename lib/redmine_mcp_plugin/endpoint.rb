@@ -43,7 +43,7 @@ module RedmineMcpPlugin
 
         # A tool of a plugin that is not installed is never served, and its permissions do not exist.
         unknown = tools.select(&:installed?).flat_map { |tool| tool.mcp_permissions + tool.mcp_scopes }
-                       .map(&:to_sym).uniq.reject { |scope| Redmine::AccessControl.permission(scope) }
+                                            .map(&:to_sym).uniq.reject { |scope| Redmine::AccessControl.permission(scope) }
         raise ArgumentError, "#{unknown.join(', ')} is not a Redmine permission" if unknown.any?
 
         tools

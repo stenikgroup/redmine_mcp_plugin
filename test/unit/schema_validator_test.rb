@@ -4,6 +4,7 @@ require File.expand_path('../test_helper', __dir__)
 
 class RedmineMcpPluginSchemaValidatorTest < ActiveSupport::TestCase
   V = RedmineMcpPlugin::SchemaValidator
+  E = RedmineMcpPlugin::ToolError
 
   SCHEMA = {
     'type' => 'object',
@@ -141,5 +142,39 @@ class RedmineMcpPluginSchemaValidatorTest < ActiveSupport::TestCase
     schema = { 'properties' => { 'limit' => { 'type' => 'integer' } } }
     assert_nil V.coerce(schema, { 'limit' => nil })['limit']
     assert_equal 'kept', V.coerce(schema, { 'other' => 'kept' })['other']
+  end
+
+  def test_a_refusal_names_the_type_expected_and_the_shape_received
+    schema = { 'properties' => { 'hours' => { 'type' => 'number' }, 'tags' => { 'type' => %w[string integer] },
+                                 'flag' => { 'type' => 'boolean' } } }
+
+    assert_equal 'hours must be a number, got an array', assert_raises(E) { V.validate!(schema, { 'hours' => [1] }) }.message
+    assert_equal 'tags must be a string or an integer, got an object', assert_raises(E) { V.validate!(schema, { 'tags' => {} }) }.message
+    assert_equal 'flag must be true or false, got "yes"', assert_raises(E) { V.validate!(schema, { 'flag' => 'yes' }) }.message
+  end
+
+  # A type the validator does not know is left to the tool, and named as it is.
+  def test_a_type_it_does_not_check_passes
+    schema = { 'properties' => { 'filters' => { 'type' => 'object' }, 'ids' => { 'type' => 'array' } } }
+    assert_nothing_raised { V.validate!(schema, { 'filters' => 'anything', 'ids' => 3 }) }
+    assert_equal 'array', V.name_types(%w[array])
+  end
+
+  def test_numbers_are_recognised_and_coerced
+    schema = { 'properties' => { 'hours' => { 'type' => 'number', 'minimum' => 0.5 } } }
+
+    assert_equal 1.5, V.coerce(schema, { 'hours' => '1.5' })['hours']
+    assert_equal 2, V.coerce(schema, { 'hours' => 2 })['hours']
+    assert_equal 'soon', V.coerce(schema, { 'hours' => 'soon' })['hours']
+    assert_match 'hours must be at least 0.5', assert_raises(E) { V.validate!(schema, { 'hours' => '0.25' }) }.message
+  end
+
+  def test_required_accepts_false_and_zero_and_refuses_blank
+    schema = { 'properties' => { 'flag' => { 'type' => 'boolean' }, 'count' => { 'type' => 'integer' },
+                                 'name' => { 'type' => 'string' } }, 'required' => %w[flag count name] }
+
+    assert_nothing_raised { V.validate!(schema, { 'flag' => false, 'count' => 0, 'name' => 'x' }) }
+    assert_equal 'Missing required arguments: flag, name',
+                 assert_raises(E) { V.validate!(schema, { 'count' => 0, 'name' => ' ' }) }.message
   end
 end

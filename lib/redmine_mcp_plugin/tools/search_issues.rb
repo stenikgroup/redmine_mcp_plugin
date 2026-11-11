@@ -41,7 +41,7 @@ module RedmineMcpPlugin
                'describe' => { 'type' => %w[boolean string],
                                'description' => 'true: the available filters and sortable fields instead of issues; a field name: that filter only.' },
                'project' => { 'type' => %w[string integer],
-                             'description' => 'Restrict to one project (identifier or numeric id).' },
+                              'description' => 'Restrict to one project (identifier or numeric id).' },
                'search' => { 'type' => 'string', 'description' => 'Text searched across subject, description and notes.' },
                'status' => { 'type' => 'string', 'enum' => %w[open closed all],
                              'description' => 'Issue status filter. Defaults to open.' },
@@ -140,7 +140,7 @@ module RedmineMcpPlugin
         set_filter!(query, 'assigned_to_id', '=', user_ref!(arguments['assigned_to'], 'assigned_to')) if arguments['assigned_to'].present?
         set_filter!(query, 'author_id', '=', user_ref!(arguments['author'], 'author'))                if arguments['author'].present?
 
-        set_filter!(query, 'tracker_id', '=', tracker_id(arguments['tracker']))   if arguments['tracker'].present?
+        set_filter!(query, 'tracker_id', '=', tracker_id(arguments['tracker'])) if arguments['tracker'].present?
         set_filter!(query, 'priority_id', '=', priority_id(arguments['priority'])) if arguments['priority'].present?
         set_filter!(query, 'fixed_version_id', '=', fixed_version_id(project, arguments['fixed_version'])) if arguments['fixed_version'].present?
 

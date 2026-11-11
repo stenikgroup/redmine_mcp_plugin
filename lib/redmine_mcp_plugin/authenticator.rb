@@ -106,7 +106,8 @@ module RedmineMcpPlugin
       return nil unless /\ABasic /i.match?(authorization)
 
       credentials = ActionController::HttpAuthentication::Basic.decode_credentials(@request).split(':', 2)
-      username, password = credentials[0].to_s, credentials[1].to_s
+      username = credentials[0].to_s
+      password = credentials[1].to_s
       return nil if username.blank?
 
       user = User.try_to_login(username, password)

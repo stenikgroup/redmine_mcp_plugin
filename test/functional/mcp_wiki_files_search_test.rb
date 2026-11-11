@@ -29,18 +29,6 @@ class McpWikiFilesSearchTest < Redmine::ControllerTest
     User.current = nil
   end
 
-  def state(result)
-    assert result, json_body.inspect
-    assert_not result['isError'], result.inspect
-    result['structuredContent']
-  end
-
-  def refusal(result)
-    assert result, json_body.inspect
-    assert result['isError'], result.inspect
-    result['content'].first['text']
-  end
-
   def call_as(scopes, name, arguments)
     application = Doorkeeper::Application.create!(name: 'MCP test', redirect_uri: 'https://client.example/callback',
                                                   scopes: scopes)
@@ -151,7 +139,7 @@ class McpWikiFilesSearchTest < Redmine::ControllerTest
     files = state(call_tool('list_files', { 'project' => 'ecookbook' }))['files']
     assert_includes files.map { |file| file['filename'] }, 'notes.md'
     assert_equal 2, files.detect { |file| file['filename'] == 'changes.txt' }['version']['id']
-    assert files.all? { |file| file.key?('digest') && file.key?('downloads') }
+    assert(files.all? { |file| file.key?('digest') && file.key?('downloads') })
   end
 
   def test_add_file_refuses_an_empty_file_a_foreign_version_and_a_disabled_module
@@ -190,7 +178,7 @@ class McpWikiFilesSearchTest < Redmine::ControllerTest
   def test_search_leaves_out_the_types_a_token_may_not_view
     scoped = state(call_as('view_project search_project view_news', 'search', { 'q' => 'recipe' })['result'])
     assert_equal %w[news projects], scoped['searched_types'].sort
-    assert_empty scoped['results'].select { |row| row['type'].to_s.start_with?('issue') }
+    assert_empty(scoped['results'].select { |row| row['type'].to_s.start_with?('issue') })
 
     text = refusal(call_as('view_project search_project view_news', 'search', { 'q' => 'recipe', 'types' => ['issues'] })['result'])
     assert_match 'You may read none of these types here', text
@@ -215,7 +203,7 @@ class McpWikiFilesSearchTest < Redmine::ControllerTest
 
     wide = state(call_as('view_project search_project view_issues view_private_notes', 'search',
                          { 'q' => 'zanzibar', 'types' => ['issues'] })['result'])
-    assert_equal [1], wide['results'].map { |row| row['id'] }
+    assert_equal([1], wide['results'].map { |row| row['id'] })
   end
 
   # The role decides for an API key, as in core, and a public note is always searched.
@@ -224,7 +212,7 @@ class McpWikiFilesSearchTest < Redmine::ControllerTest
     Journal.create!(journalized: Issue.find(1), user: User.find(1), notes: 'the zanzibar contract', private_notes: true)
     Journal.create!(journalized: Issue.find(2), user: User.find(1), notes: 'the timbuktu contract')
 
-    assert_equal [1], state(call_tool('search', { 'q' => 'zanzibar', 'types' => ['issues'] }))['results'].map { |row| row['id'] }
+    assert_equal([1], state(call_tool('search', { 'q' => 'zanzibar', 'types' => ['issues'] }))['results'].map { |row| row['id'] })
   end
 
   def test_search_matches_a_public_note_for_a_token_without_view_private_notes
@@ -232,6 +220,14 @@ class McpWikiFilesSearchTest < Redmine::ControllerTest
 
     narrow = state(call_as('view_project search_project view_issues', 'search',
                            { 'q' => 'timbuktu', 'types' => ['issues'] })['result'])
-    assert_equal [2], narrow['results'].map { |row| row['id'] }
+    assert_equal([2], narrow['results'].map { |row| row['id'] })
+  end
+
+  def test_update_wiki_page_reports_what_core_refuses
+    assert_no_difference 'WikiPage.count' do
+      text = refusal(call_tool('update_wiki_page', { 'project' => 'ecookbook', 'title' => 'Refused', 'text' => 'Body',
+                                                     'comments' => 'c' * 2000 }))
+      assert_match 'Could not save the page: ', text
+    end
   end
 end

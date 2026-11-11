@@ -12,7 +12,7 @@ module RedmineMcpPlugin
              'type' => 'object',
              'properties' => {
                'project' => { 'type' => %w[string integer],
-                             'description' => 'Only queries global or on this project (identifier or numeric id).' },
+                              'description' => 'Only queries global or on this project (identifier or numeric id).' },
                'name' => { 'type' => 'string', 'description' => 'Case-insensitive substring of the query name.' },
                'offset' => { 'type' => 'integer', 'minimum' => 0,
                              'description' => 'Rows to skip, for paging past the server cap.' },

@@ -28,18 +28,6 @@ class McpIssueTimeTest < Redmine::ControllerTest
     User.current = nil
   end
 
-  def state(result)
-    assert result, json_body.inspect
-    assert_not result['isError'], result.inspect
-    result['structuredContent']
-  end
-
-  def refusal(result)
-    assert result, json_body.inspect
-    assert result['isError'], result.inspect
-    result['content'].first['text']
-  end
-
   def others_entry
     TimeEntry.where(project_id: 1).where.not(user_id: 2).first || TimeEntry.generate!(project_id: 1, user: User.find(3))
   end

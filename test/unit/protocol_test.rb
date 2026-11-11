@@ -40,4 +40,28 @@ class RedmineMcpPluginProtocolTest < ActiveSupport::TestCase
   def test_capabilities_advertise_only_tools
     assert_equal({ tools: {} }, P.capabilities)
   end
+
+  # The icon rides on serverInfo for initialize and server/discover only.
+  def test_the_icon_is_a_png_data_uri_with_its_size
+    icon = P.implementation[:icons]&.first
+    assert icon, 'assets/icon.png should be advertised'
+    assert_equal 'image/png', icon[:mimeType]
+    assert icon[:src].start_with?('data:image/png;base64,')
+    assert_match(/\A\d+x\d+\z/, icon[:sizes].first)
+    assert_not P.server_info.key?(:icons)
+  end
+
+  def test_a_notification_is_a_message_with_a_method_and_no_id
+    j = RedmineMcpPlugin::JsonRpc
+    assert j.notification?({ 'method' => 'notifications/initialized' })
+    assert_not j.notification?({ 'method' => 'ping', 'id' => 1 })
+    assert_not j.notification?({ 'id' => 1 })
+    assert_not j.notification?('ping')
+  end
+
+  def test_an_error_carries_data_only_when_given
+    j = RedmineMcpPlugin::JsonRpc
+    assert_not j.error(1, -1, 'x')[:error].key?(:data)
+    assert_equal({ supported: ['a'] }, j.error(1, -1, 'x', { supported: ['a'] })[:error][:data])
+  end
 end

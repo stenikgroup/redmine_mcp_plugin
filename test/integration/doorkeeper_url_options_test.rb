@@ -9,7 +9,7 @@ class DoorkeeperUrlOptionsTest < Redmine::IntegrationTest
     Setting.rest_api_enabled = '1'
     Redmine::SudoMode.stubs(:enabled?).returns(true)
     @client = Doorkeeper::Application.create!(name: 'MCP client', redirect_uri: 'http://127.0.0.1:4567/callback',
-                                           scopes: 'view_project view_issues')
+                                              scopes: 'view_project view_issues')
   end
 
   def teardown

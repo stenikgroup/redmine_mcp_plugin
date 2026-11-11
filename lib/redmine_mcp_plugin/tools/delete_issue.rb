@@ -31,6 +31,7 @@ module RedmineMcpPlugin
       def perform(arguments)
         issue = fetch_issue(arguments['issue'])
         raise ToolError, "Project #{issue.project.identifier} is closed; reopen it first" if issue.project.closed?
+
         # delete_issues is granted per tracker: authorize! covers the scope, deletable? the tracker.
         authorize!(:delete_issues, issue.project)
         raise ToolError, 'You do not have permission to do that' unless issue.deletable?(user)

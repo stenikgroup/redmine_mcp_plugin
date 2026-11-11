@@ -26,6 +26,7 @@ module RedmineMcpPlugin
         entry = TimeEntry.visible(user).find_by(id: arguments['time_entry'].to_i)
         raise ToolError, "No visible time entry with id #{arguments['time_entry'].inspect}" if entry.nil? || !entry.visible?(user)
         raise ToolError, "Project #{entry.project.identifier} is closed; reopen it first" if entry.project.closed?
+
         # Core's rule: edit_time_entries for anyone's entry, edit_own_time_entries for one's own.
         unless entry.editable_by?(user)
           own = entry.user_id == user.id

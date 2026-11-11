@@ -1,0 +1,93 @@
+# RuboCop for the plugin, run from this directory with Redmine's own gems:
+#
+#   BUNDLE_GEMFILE=../../Gemfile bundle exec rubocop -c .rubocop.yml app config lib test init.rb
+#
+# The configuration and the paths are named because Redmine's root
+# configuration excludes plugins/, and RuboCop applies that exclusion to a run
+# that leaves either out: it then inspects no file and reports no offense.
+#
+# .rubocop_todo.yml holds what the code did not meet when the linter was added.
+# It is a ratchet: an offense it does not list fails the build. Shrink it, do
+# not grow it; regenerate it with
+#
+#   rubocop -c .rubocop.yml --auto-gen-config --exclude-limit 200 --no-offense-counts \
+#           --no-auto-gen-timestamp app config lib test init.rb
+inherit_from: .rubocop_todo.yml
+
+plugins:
+  - rubocop-performance
+  - rubocop-rails
+
+AllCops:
+  TargetRubyVersion: 3.2
+  # A cop added by a RuboCop upgrade in Redmine's Gemfile must not fail a build
+  # that changed nothing here; new cops are taken up on purpose.
+  NewCops: disable
+  SuggestExtensions: false
+
+# --- the project's style, where it differs from the defaults -----------------
+
+Layout/LineLength:
+  Max: 165
+
+# A hash is written plainly or, where it reads as a table, aligned as one.
+Layout/HashAlignment:
+  EnforcedHashRocketStyle: [key, table]
+  EnforcedColonStyle: [key, table]
+
+# A class is documented where there is something to say, not by rule.
+Style/Documentation:
+  Enabled: false
+
+# A guard on its own lines often reads better next to a long condition.
+Style/IfUnlessModifier:
+  Enabled: false
+
+# User.find_by_api_key is a method Redmine defines, not a dynamic finder.
+Rails/DynamicFindBy:
+  AllowedMethods:
+    - find_by_api_key
+
+# These two reassign rows the way core's own controllers do, in one statement
+# and without callbacks, when an issue or a wiki page is deleted.
+Rails/SkipsModelValidations:
+  Exclude:
+    - 'test/**/*'
+    - 'lib/redmine_mcp_plugin/tools/delete_issue.rb'
+    - 'lib/redmine_mcp_plugin/tools/delete_wiki_page.rb'
+
+# --- tests --------------------------------------------------------------------
+
+# A test reads a reply as plain hashes and arrays, where `pluck` and
+# `parsed_body` would hide what is asserted.
+Rails/Pluck:
+  Exclude:
+    - 'test/**/*'
+Rails/ResponseParsedBody:
+  Exclude:
+    - 'test/**/*'
+
+# Fixtures are put in the state a test needs, validations or not: see
+# Rails/SkipsModelValidations above.
+
+# A test is named after the status it expects: test_..._is_a_400.
+Naming/VariableNumber:
+  Exclude:
+    - 'test/**/*'
+
+# A test class is as long as what it covers.
+Metrics/ClassLength:
+  Exclude:
+    - 'test/**/*'
+Metrics/MethodLength:
+  Exclude:
+    - 'test/**/*'
+Metrics/AbcSize:
+  Exclude:
+    - 'test/**/*'
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - 'test/**/*'
+Metrics/PerceivedComplexity:
+  Exclude:
+    - 'test/**/*'

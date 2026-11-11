@@ -377,6 +377,7 @@ module RedmineMcpPlugin
       WRITE_ATTRIBUTES.each_with_object({}) do |(name, (attribute, kind)), attributes|
         value = arguments[name]
         next if value.nil?
+
         unless issue.safe_attribute?(attribute, user)
           problems << blocked_name(issue, attribute)
           next
@@ -489,6 +490,7 @@ module RedmineMcpPlugin
 
       tracker = project.trackers.find_by(name: name.to_s)
       raise ToolError, "Project #{project.identifier} has no tracker named #{name.inspect}" if tracker.nil?
+
       unless allowed.where(id: tracker.id).exists?
         # One core rule, two acts: creating with a tracker, or moving an issue to one.
         act = issue.new_record? ? 'create issues with' : 'move issues to'
@@ -1164,7 +1166,7 @@ module RedmineMcpPlugin
         value = blocked(problems, 'sharing') { version_sharing(version, arguments['sharing']) }
         attributes['sharing'] = value unless value.nil?
       end
-      unless arguments['custom_field_values'].blank?
+      if arguments['custom_field_values'].present?
         value = blocked(problems, 'custom_field_values') { custom_field_values_for(version, arguments['custom_field_values']) }
         attributes['custom_field_values'] = value unless value.nil?
       end
@@ -1217,7 +1219,7 @@ module RedmineMcpPlugin
       attributes
     end
 
-    def category_assignee_id(category, value)
+    def category_assignee_id(_category, value)
       id = user_id_from(value, 'assigned_to')
       return id if Principal.where(type: %w[User Group]).exists?(id: id)
 

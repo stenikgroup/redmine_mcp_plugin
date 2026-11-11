@@ -33,18 +33,6 @@ class McpDeleteToolsTest < Redmine::ControllerTest
     User.current = nil
   end
 
-  def state(result)
-    assert result, json_body.inspect
-    assert_not result['isError'], result.inspect
-    result['structuredContent']
-  end
-
-  def refusal(result)
-    assert result, json_body.inspect
-    assert result['isError'], result.inspect
-    result['content'].first['text']
-  end
-
   # --- issues -------------------------------------------------------------
 
   def test_delete_issue_takes_its_subtasks_with_it
@@ -150,6 +138,30 @@ class McpDeleteToolsTest < Redmine::ControllerTest
 
     state(call_tool('delete_wiki_page', { 'project' => 'ecookbook', 'title' => 'Chapter' }))
     assert_not WikiPage.exists?(child.id)
+  end
+
+  def test_delete_wiki_page_takes_its_children_with_it_or_leaves_them_at_the_root
+    wiki = Project.find(1).wiki
+    make = lambda do |title, parent = nil|
+      WikiPage.create!(wiki: wiki, title: title, parent: parent, content: WikiContent.new(text: title, author: User.find(2)))
+    end
+    guide   = make.call('Guide')
+    chapter = make.call('Chapter', guide)
+
+    state(call_tool('delete_wiki_page', { 'project' => 'ecookbook', 'title' => 'Guide', 'children' => 'destroy' }))
+    assert_not WikiPage.exists?(guide.id)
+    assert_not WikiPage.exists?(chapter.id)
+
+    manual  = make.call('Manual')
+    section = make.call('Section', manual)
+    state(call_tool('delete_wiki_page', { 'project' => 'ecookbook', 'title' => 'Manual', 'children' => 'nullify' }))
+    assert_nil section.reload.parent_id
+
+    orphan = make.call('Orphaned', section)
+    text   = refusal(call_tool('delete_wiki_page', { 'project' => 'ecookbook', 'title' => 'Section', 'children' => 'reassign',
+                                                     'reassign_to' => 'Orphaned' }))
+    assert_match 'reassign_to must be a page outside the one being deleted', text
+    assert WikiPage.exists?(orphan.id)
   end
 
   def test_delete_wiki_page_refuses_a_protected_page_without_its_permission

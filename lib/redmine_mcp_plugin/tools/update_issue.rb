@@ -40,7 +40,7 @@ module RedmineMcpPlugin
                'add_tag_list' => { 'type' => 'array', 'description' => 'Tag names.' },
                'remove_tag_list' => { 'type' => 'array', 'description' => 'Tag names.' },
                'custom_field_values' => { 'type' => 'object',
-                                         'description' => 'By field id from get_issue_fields; a value, or its label ' \
+                                          'description' => 'By field id from get_issue_fields; a value, or its label ' \
                                                           'when it names one value.' },
                'notes' => { 'type' => 'string', 'description' => 'Note recorded with this change.' }
              },

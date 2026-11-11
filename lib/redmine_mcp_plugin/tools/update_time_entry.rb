@@ -31,7 +31,7 @@ module RedmineMcpPlugin
                            'description' => 'User id from list_users, or "me". Someone else needs the permission to ' \
                                             'log time for other users.' },
                'custom_field_values' => { 'type' => 'object',
-                                         'description' => 'By field id from list_enumerations with the project; ' \
+                                          'description' => 'By field id from list_enumerations with the project; ' \
                                                           'a value, or its label when it names one value.' }
              },
              'required' => %w[time_entry],
@@ -43,6 +43,7 @@ module RedmineMcpPlugin
       def perform(arguments)
         entry = fetch_time_entry(arguments['time_entry'])
         raise ToolError, "Project #{entry.project.identifier} is closed; reopen it first" if entry.project.closed?
+
         # Core's rule: edit_time_entries for anyone's entry, edit_own_time_entries for one's own.
         unless entry.editable_by?(user)
           own = entry.user_id == user.id

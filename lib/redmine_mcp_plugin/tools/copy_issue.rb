@@ -39,7 +39,7 @@ module RedmineMcpPlugin
                'estimated_hours' => { 'type' => 'number' },
                'is_private' => { 'type' => 'boolean' },
                'custom_field_values' => { 'type' => 'object',
-                                         'description' => 'By field id from get_issue_fields; a value, or its label ' \
+                                          'description' => 'By field id from get_issue_fields; a value, or its label ' \
                                                           'when it names one value.' }
              },
              'required' => %w[issue],
@@ -51,7 +51,7 @@ module RedmineMcpPlugin
       private
 
       def perform(arguments)
-        source  = fetch_issue(arguments['issue'])
+        source = fetch_issue(arguments['issue'])
         authorize!(:copy_issues, source.project)
         project = arguments['project'].present? ? fetch_project(arguments['project']) : source.project
         raise ToolError, "Project #{project.identifier} is closed; reopen it first" if project.closed?
