@@ -149,6 +149,14 @@ class McpControllerTest < Redmine::ControllerTest
     assert_equal RedmineMcpPlugin::JsonRpc::PARSE_ERROR, json_body['error']['code']
   end
 
+  # An array is legal JSON-RPC and no MCP method takes one; it is the caller's
+  # mistake, not an internal error.
+  def test_params_that_are_not_an_object_are_invalid_params
+    post_mcp({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: ['whoami'] }.to_json, api_key_headers(User.find(2)))
+    assert_response :success
+    assert_equal RedmineMcpPlugin::JsonRpc::INVALID_PARAMS, json_body['error']['code']
+  end
+
   # Batching was removed from the protocol in 2025-06-18. Refusing it beats
   # processing element zero and silently dropping the rest.
   def test_batches_are_refused

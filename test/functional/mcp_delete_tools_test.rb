@@ -232,9 +232,11 @@ class McpDeleteToolsTest < Redmine::ControllerTest
 
     deleted = state(call_tool('delete_project', arguments.merge('confirm' => project.identifier)))
     assert deleted['scheduled']
-    # Core marks the project at once and deletes it in a background job.
+    # Core marks the project at once and deletes it in a background job; the
+    # reply claims the deletion only when the project is gone.
     remaining = Project.find_by(id: project.id)
     assert(remaining.nil? || remaining.status == Project::STATUS_SCHEDULED_FOR_DELETION)
+    assert_equal remaining.nil?, deleted['deleted']
   end
 
   def test_delete_project_with_subprojects_is_for_an_administrator

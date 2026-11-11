@@ -195,4 +195,43 @@ class McpWikiFilesSearchTest < Redmine::ControllerTest
     text = refusal(call_as('view_project search_project view_news', 'search', { 'q' => 'recipe', 'types' => ['issues'] })['result'])
     assert_match 'You may read none of these types here', text
   end
+
+  # Core matches private notes under the role alone; a match would tell a token
+  # without view_private_notes what such a note says.
+  def test_search_does_not_match_a_private_note_for_a_token_without_view_private_notes
+    Role.find(1).add_permission!(:view_private_notes)
+    Journal.create!(journalized: Issue.find(1), user: User.find(1), notes: 'the zanzibar contract', private_notes: true)
+    arguments = { 'q' => 'zanzibar', 'types' => ['issues'] }
+
+    narrow = state(call_as('view_project search_project view_issues', 'search', arguments)['result'])
+    assert_equal 0, narrow['total_count']
+    assert_empty narrow['results']
+    assert_equal 0, narrow['count_by_type'].values.sum
+  end
+
+  def test_search_matches_a_private_note_for_a_token_with_view_private_notes
+    Role.find(1).add_permission!(:view_private_notes)
+    Journal.create!(journalized: Issue.find(1), user: User.find(1), notes: 'the zanzibar contract', private_notes: true)
+
+    wide = state(call_as('view_project search_project view_issues view_private_notes', 'search',
+                         { 'q' => 'zanzibar', 'types' => ['issues'] })['result'])
+    assert_equal [1], wide['results'].map { |row| row['id'] }
+  end
+
+  # The role decides for an API key, as in core, and a public note is always searched.
+  def test_search_matches_notes_as_core_does_outside_a_narrowed_token
+    Role.find(1).add_permission!(:view_private_notes)
+    Journal.create!(journalized: Issue.find(1), user: User.find(1), notes: 'the zanzibar contract', private_notes: true)
+    Journal.create!(journalized: Issue.find(2), user: User.find(1), notes: 'the timbuktu contract')
+
+    assert_equal [1], state(call_tool('search', { 'q' => 'zanzibar', 'types' => ['issues'] }))['results'].map { |row| row['id'] }
+  end
+
+  def test_search_matches_a_public_note_for_a_token_without_view_private_notes
+    Journal.create!(journalized: Issue.find(2), user: User.find(1), notes: 'the timbuktu contract')
+
+    narrow = state(call_as('view_project search_project view_issues', 'search',
+                           { 'q' => 'timbuktu', 'types' => ['issues'] })['result'])
+    assert_equal [2], narrow['results'].map { |row| row['id'] }
+  end
 end

@@ -29,7 +29,15 @@ module RedmineMcpPlugin
     def call(message)
       id     = message['id']
       method = message['method'].to_s
-      params = message['params'] || {}
+      params = message['params']
+      # MCP passes params by name. An array, legal in JSON-RPC, or a scalar
+      # would raise further down and leave as an internal error with a
+      # backtrace in the log; it is the caller's mistake, and is said so.
+      unless params.nil? || params.is_a?(Hash)
+        return JsonRpc.error(id, JsonRpc::INVALID_PARAMS, 'Invalid params: params must be an object')
+      end
+
+      params ||= {}
 
       case method
       when 'server/discover'          then JsonRpc.result(id, discover)
