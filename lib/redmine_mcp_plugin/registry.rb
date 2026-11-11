@@ -14,6 +14,8 @@ module RedmineMcpPlugin
           Tools::WhoAmI,
           Tools::ListProjects,
           Tools::GetProject,
+          Tools::GetProjectFields,
+          Tools::UpdateProjects,
           Tools::SearchIssues,
           Tools::ListQueries,
           Tools::GetIssue,

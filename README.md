@@ -65,6 +65,12 @@ sections.
 | Scope | Label in Administration → Applications | Section |
 |---|---|---|
 | `view_project` | View projects | Project |
+| `edit_project` | Edit project | Project |
+| `close_project` | Close / reopen the project | Project |
+| `select_project_publicity` | Set project public or private | Project |
+| `select_project_modules` | Select project modules | Project |
+| `add_subprojects` | Create subprojects | Project |
+| `add_project` | Create project | Project. No tool creates projects; core asks for it to make a subproject top-level |
 | `view_issues` | View Issues | Issue tracking |
 | `view_issue_watchers` | View watchers list | Issue tracking |
 | `view_wiki_pages` | View wiki | Wiki |
@@ -121,7 +127,8 @@ check at runtime (`scopes`), an extension's tools included, dropping the write t
 is read-only and the tools and scopes of plugins that are not installed, intersected with what
 Doorkeeper will accept.
 Read-only gives `view_project`, `view_issues`, `view_issue_watchers`, `view_wiki_pages`,
-`view_time_entries` and `view_news`; with writes on, add `add_issues`, `add_issue_notes`,
+`view_time_entries` and `view_news`; with writes on, add `edit_project`, `close_project`,
+`select_project_publicity`, `select_project_modules`, `add_subprojects`, `add_project`, `add_issues`, `add_issue_notes`,
 `edit_issues`, `edit_own_issues`, `edit_own_issue_notes`, `log_time`, `set_notes_private`,
 `manage_subtasks`, `add_issue_watchers`, `delete_issue_watchers`, `set_issues_private`,
 `set_own_issues_private`, `manage_issue_relations` and `manage_news`. With redmine_checklists installed, `view_checklists`
@@ -279,6 +286,8 @@ while read-only mode is on, which is the default.
 | `log_time` (write) | `log_time`. Always for the authenticated user |
 | `create_news` (write) | `manage_news`. Publishes at once and, when `news_added` is a notified event, emails project members and news watchers; the tool tells the agent to get explicit confirmation first |
 | `update_news` (write) | `manage_news`. Editing sends no email |
+| `get_project_fields` | `edit_project` or `close_project`. What the caller may set on a project and from which values, before a write. Served only while writes are on |
+| `update_projects` (write) | `edit_project` for the fields, `close_project` for `status`, plus `select_project_publicity` for `is_public`, `select_project_modules` for the modules, `add_subprojects` in the new parent for `parent`, and the global `add_project` for `parent: "none"` on a subproject |
 
 `get_issue` respects per-field custom field visibility and filters private notes by role, as above.
 Its history reads as the issue page's: a custom field by its name, a reference without `_id` (`status`,
@@ -315,7 +324,8 @@ Parameters use one shape per concept across tools: an issue is `issue`, a numeri
 `project`, an identifier or numeric id; a news item is `news`; a person - `assigned_to`, `author`, `user` - is a user id from
 `list_users`, or `"me"`; `parent` is an issue id; `category` and `fixed_version` are a name or an id
 from `get_issue_fields`; the string `"none"` clears an optional date or reference (`parent`, `category`,
-`fixed_version`, `assigned_to`, `start_date`, `due_date`). Filters that name a project, an issue, a version or a category through
+`fixed_version`, `assigned_to`, `start_date`, `due_date`, and on a project `parent`, `default_version`,
+`default_assigned_to`, `default_issue_query`). Filters that name a project, an issue, a version or a category through
 `filters` are authorised like the named parameters, so an invisible one is refused rather than
 answered with zero.
 
@@ -346,6 +356,48 @@ that, as core's update does, so the tracker change is journaled. `done_ratio` is
 computes it from the status. Watchers are added and removed explicitly; nothing replaces the list.
 Every write reply is read back from the database after the save and the plugins' hooks, so it never
 claims a value that is not stored.
+
+Project writes: `update_projects` sets what core's project settings form lets the same user set on an
+existing project: name, description, homepage, public flag, parent, inherit members, modules,
+trackers, issue custom fields, default version, assignee and query, the project's custom fields, and
+closing and reopening. One call takes one project or up to 50, with shared values and values
+`per_project`. Each parameter passes core's own check first (`allowed_to?`, `safe_attribute?`,
+`allowed_parents`, `editable_custom_field_values`), then the project is saved through
+`safe_attributes=`, `close` and `reopen`, as the controller does. Where core would drop a value
+silently - `is_public` or modules without the permission, `inherit_members` under an invisible
+parent, a custom field the roles do not show - the parameter is refused with the cause, the
+permission by its label in the caller's language. The model accepts more than the form offers:
+any id as default version, assignee or query, any string as a module, an issue custom field that is
+for all projects, and all of these without the issue tracking module. There the form is the
+reference, and `get_project_fields` lists exactly its options. Lists are changed with `add_` and
+`remove_`, never replaced, so a shared value cannot flatten the differences between projects. Only
+what is sent is validated, as in the REST API: the form posts every custom field and so validates all
+of them on every save. A required custom field the caller cannot see is not validated by core and
+cannot fail a save.
+
+Everything runs in one transaction. Core writes trackers, modules and issue custom fields the moment
+they are assigned, before validation, so core's own update can leave them changed when the save
+fails; here a refusal in any project rolls back all of them, and the refusal names each project and
+parameter. `preview: true` is the same run rolled back at the end, so it shows what a write would do,
+side effects included: a computed custom field, the subprojects closed with their parent, the member
+count after a change of parent or `inherit_members`, and the issues that lose their target version
+when a project moves (core clears it, with a journal per issue). The reply gives old and new value
+per project and field from two reads of the database, and names what was sent but already stored. A
+rollback needs InnoDB: with a MyISAM table among those written, both preview and write are refused.
+
+Redmine keeps no history of project changes. Each changed project is one line in
+`log/redmine_mcp_plugin_projects.log`: time, user, project, and per field the old and the new value
+as JSON, values of role-restricted fields included; a subproject closed or reopened with its parent
+has its own line. The line is written before the commit, and a change that cannot be logged is not
+made. The file is not rotated by the plugin.
+
+Left out on purpose: creating, archiving (administrators only) and deleting projects (a role
+permission in 6.1, but neither a field nor reversible, and core guards it with sudo mode); the
+identifier, which core never changes on an existing project; members, versions, categories, time
+tracking activities, repositories, forums and the tabs of other plugins, redmine_agile's project
+colour among them. A custom field computed by computed_custom_field is refused, since the plugin
+overwrites it on every save. Administrators act through their roles over OAuth, as everywhere; by API
+key an administrator is one, and sets everything.
 
 Attachments: `get_issue` lists those the caller may open, `get_attachment` reads a text file within
 `file_max_size_displayed` and reports a binary or larger file as omitted, and `add_issue_attachment`
