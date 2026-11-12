@@ -4,7 +4,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that runs ins
 plugin. It adds one endpoint, `POST /mcp`, and authenticates it with Redmine's own mechanisms. Every
 tool runs as a real Redmine user and is limited by that user's permissions.
 
-Version 0.3.0. Read-only by default. See [CHANGELOG.md](CHANGELOG.md).
+Version 0.4.0. Read-only by default. See [CHANGELOG.md](CHANGELOG.md).
 
 > [!WARNING]
 > **This fork carries security fixes that the upstream projects do not have.** If you run
